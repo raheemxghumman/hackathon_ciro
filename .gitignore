@@ -1,0 +1,24 @@
+# Claude Code session state
+/.claude
+
+# Secrets — NEVER commit
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/venv/
+**/.venv/
+
+# Runtime artifacts
+**/logs/
+**/*.log
+
+# OS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/
