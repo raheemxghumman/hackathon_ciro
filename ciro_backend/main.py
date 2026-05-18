@@ -4,7 +4,11 @@ from pydantic import BaseModel
 import uvicorn
 from dotenv import load_dotenv
 import crisis_agents
-from mock_signals import get_weather_signal, get_traffic_signal, get_social_media_signal, get_real_weather
+from mock_signals import (
+    get_real_weather,
+    get_real_traffic,
+    get_real_earthquake,
+)
 
 load_dotenv()
 
@@ -18,14 +22,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 class TextRequest(BaseModel):
     text: str
+
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
+
 import orchestrator
+
 
 @app.post("/analyze")
 async def analyze(body: TextRequest):
@@ -34,13 +42,24 @@ async def analyze(body: TextRequest):
     except Exception as e:
         return {"error": str(e)}
 
+
 @app.get("/signals")
-async def get_live_signals():
+async def get_live_signals(location: str = "Islamabad"):
+    """Return live ambient signals for `location`. The mobile app polls this
+    every 30 seconds to keep the home-page chips fresh. Supports any location
+    globally — pass `?location=Tokyo` or `?location=New York` etc.
+    """
+    weather = await get_real_weather(location)
+    traffic = await get_real_traffic(location)
+    earthquake = await get_real_earthquake(location)
     return {
-        "weather": await get_real_weather("Islamabad"),
-        "traffic": get_traffic_signal("Islamabad"),
-        "timestamp": "live"
+        "weather": weather,
+        "traffic": traffic,
+        "earthquake": earthquake,
+        "location": location,
+        "timestamp": "live",
     }
+
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

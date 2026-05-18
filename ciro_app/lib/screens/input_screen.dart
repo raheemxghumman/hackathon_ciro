@@ -143,11 +143,17 @@ class _InputScreenState extends State<InputScreen> {
     final trafficMap = (_liveSignals['traffic'] is Map)
         ? Map<String, dynamic>.from(_liveSignals['traffic'] as Map)
         : <String, dynamic>{};
+    final quakeMap = (_liveSignals['earthquake'] is Map)
+        ? Map<String, dynamic>.from(_liveSignals['earthquake'] as Map)
+        : <String, dynamic>{};
     final weatherData = (weatherMap['data'] is Map)
         ? Map<String, dynamic>.from(weatherMap['data'] as Map)
         : <String, dynamic>{};
     final trafficData = (trafficMap['data'] is Map)
         ? Map<String, dynamic>.from(trafficMap['data'] as Map)
+        : <String, dynamic>{};
+    final quakeData = (quakeMap['data'] is Map)
+        ? Map<String, dynamic>.from(quakeMap['data'] as Map)
         : <String, dynamic>{};
 
     final condition = (weatherData['condition'] as String?) ?? '—';
@@ -156,7 +162,16 @@ class _InputScreenState extends State<InputScreen> {
     final congestion = (trafficData['congestion_level'] as String?) ?? '—';
     final pct = trafficData['congestion_percent'] is int
         ? trafficData['congestion_percent'] as int
+        : (trafficData['congestion_percent'] is double
+            ? (trafficData['congestion_percent'] as double).round()
+            : 0);
+    final trafficLive = (trafficMap['source'] as String?)?.contains('Live') == true
+        || trafficData['is_real'] == true;
+    final quakeCount = quakeData['event_count'] is int
+        ? quakeData['event_count'] as int
         : 0;
+    final quakeMag = quakeData['max_magnitude'];
+    final quakeLive = quakeMap['is_real'] == true;
 
     return Scaffold(
       backgroundColor: CiroColors.canvas,
@@ -174,6 +189,10 @@ class _InputScreenState extends State<InputScreen> {
                     temp: temp,
                     congestion: congestion,
                     pct: pct,
+                    trafficLive: trafficLive,
+                    quakeCount: quakeCount,
+                    quakeMag: quakeMag,
+                    quakeLive: quakeLive,
                   ),
                   if (_history.isNotEmpty) ...[
                     const SizedBox(height: 20),
@@ -229,7 +248,7 @@ class _InputScreenState extends State<InputScreen> {
                     style: CiroType.h1(CiroColors.inkStrong)
                         .copyWith(fontSize: 19, letterSpacing: 0.2)),
                 Text(
-                  'Crisis Intelligence · Islamabad',
+                  'Crisis Intelligence · Global',
                   style: CiroType.small(CiroColors.inkMuted),
                 ),
               ],
@@ -328,7 +347,25 @@ class _InputScreenState extends State<InputScreen> {
     required dynamic temp,
     required String congestion,
     required int pct,
+    required bool trafficLive,
+    required int quakeCount,
+    required dynamic quakeMag,
+    required bool quakeLive,
   }) {
+    final quakeValue = quakeCount > 0
+        ? (quakeMag is num ? 'M${quakeMag.toStringAsFixed(1)}' : '$quakeCount nearby')
+        : 'Stable';
+    final quakeSub = quakeCount > 0
+        ? '$quakeCount in 500km'
+        : 'No recent quakes';
+    final quakeAccent = quakeCount > 0 && quakeMag is num
+        ? (quakeMag >= 5
+            ? CiroColors.sevHigh
+            : quakeMag >= 4
+                ? CiroColors.sevMed
+                : CiroColors.sevLow)
+        : CiroColors.sevLow;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
       decoration: ciroCard(),
@@ -345,8 +382,19 @@ class _InputScreenState extends State<InputScreen> {
                   style: CiroType.eyebrow(CiroColors.inkStrong),
                 ),
               ),
+              if (trafficLive)
+                Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: Pill(
+                    text: 'LIVE',
+                    color: CiroColors.sevLow,
+                    background: CiroColors.sevLowSoft,
+                    dot: true,
+                    dense: true,
+                  ),
+                ),
               Text(
-                'updated 30s',
+                'updates 30s',
                 style: CiroType.mono(CiroColors.inkSubtle, size: 10.5),
               ),
             ],
@@ -371,18 +419,18 @@ class _InputScreenState extends State<InputScreen> {
                     icon: '🚦',
                     label: 'TRAFFIC',
                     value: congestion,
-                    sub: pct == 0 ? '—' : '$pct% blocked',
+                    sub: '$pct% blocked',
                     accent: _congestionColor(pct),
                   ),
                 ),
                 const VerticalDivider(width: 1, color: CiroColors.hairlineSoft),
                 Expanded(
                   child: _signalTile(
-                    icon: '📡',
-                    label: 'SOCIAL',
-                    value: 'Monitoring',
-                    sub: 'Awaiting report',
-                    accent: CiroColors.dataInk,
+                    icon: '🌐',
+                    label: 'SEISMIC',
+                    value: quakeValue,
+                    sub: quakeSub,
+                    accent: quakeAccent,
                   ),
                 ),
               ],
@@ -422,13 +470,19 @@ class _InputScreenState extends State<InputScreen> {
           const SizedBox(height: 6),
           Text(
             value,
-            style: CiroType.h3(CiroColors.inkStrong),
+            style: CiroType.h3(CiroColors.inkStrong).copyWith(
+              fontSize: 14,
+              height: 1.2,
+            ),
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 2),
           Text(
             sub,
-            style: CiroType.mono(accent, size: 10.5, w: FontWeight.w600),
+            style: CiroType.mono(accent, size: 10, w: FontWeight.w600)
+                .copyWith(height: 1.25),
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
         ],
@@ -634,6 +688,16 @@ class _InputScreenState extends State<InputScreen> {
         '⚡', 'Power line', 'F-6 sector',
         CiroColors.brand,
         'F-6 mein bijli ka khamba gir gaya hai, rasta band hai',
+      ),
+      _ScenarioSpec(
+        '🌐', 'Earthquake', 'Tokyo, Japan',
+        CiroColors.sevCritical,
+        'Massive earthquake just hit Tokyo, buildings shaking, people running outside',
+      ),
+      _ScenarioSpec(
+        '🏙', 'Global · Fire', 'Manhattan, NYC',
+        CiroColors.sevHigh,
+        'Major fire in a high-rise building on 5th Avenue Manhattan, smoke everywhere',
       ),
     ];
     return Column(

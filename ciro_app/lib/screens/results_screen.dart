@@ -344,8 +344,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
   Widget _signalsCard() {
     final w = _asMap(_signals['weather']);
     final t = _asMap(_signals['traffic']);
+    final q = _asMap(_signals['earthquake']);
     final wd = _asMap(w['data']);
     final td = _asMap(t['data']);
+    final qd = _asMap(q['data']);
 
     final condition = (wd['condition'] as String?) ?? '—';
     final alert = (wd['alert_level'] as String?) ?? '';
@@ -353,8 +355,30 @@ class _ResultsScreenState extends State<ResultsScreen> {
     final congestion = (td['congestion_level'] as String?) ?? '—';
     final pct = td['congestion_percent'] is int
         ? td['congestion_percent'] as int
-        : 0;
-    final live = (w['source'] as String?)?.contains('Live') == true;
+        : (td['congestion_percent'] is double
+            ? (td['congestion_percent'] as double).round()
+            : 0);
+    final trafficLive = (t['source'] as String?)?.contains('Live') == true
+        || td['is_real'] == true;
+    final quakeCount = qd['event_count'] is int ? qd['event_count'] as int : 0;
+    final quakeMag = qd['max_magnitude'];
+    final live = (w['source'] as String?)?.contains('Live') == true || trafficLive;
+
+    final quakeValue = quakeCount > 0
+        ? (quakeMag is num
+            ? 'M${quakeMag.toStringAsFixed(1)}'
+            : '$quakeCount nearby')
+        : 'Stable';
+    final quakeSub = quakeCount > 0
+        ? '$quakeCount in 500km'
+        : 'No recent quakes';
+    final quakeAccent = quakeCount > 0 && quakeMag is num
+        ? (quakeMag >= 5
+            ? CiroColors.sevHigh
+            : quakeMag >= 4
+                ? CiroColors.sevMed
+                : CiroColors.sevLow)
+        : CiroColors.sevLow;
 
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
@@ -402,7 +426,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
                     icon: '🚦',
                     label: 'TRAFFIC',
                     main: congestion,
-                    sub: pct == 0 ? '—' : '$pct% blocked',
+                    sub: '$pct% blocked',
                     accent: pct >= 75
                         ? CiroColors.sevHigh
                         : pct >= 50
@@ -413,11 +437,11 @@ class _ResultsScreenState extends State<ResultsScreen> {
                 const VerticalDivider(width: 1, color: CiroColors.hairlineSoft),
                 Expanded(
                   child: _signalTile(
-                    icon: '📡',
-                    label: 'SOCIAL',
-                    main: 'Verified',
-                    sub: 'report active',
-                    accent: CiroColors.dataInk,
+                    icon: '🌐',
+                    label: 'SEISMIC',
+                    main: quakeValue,
+                    sub: quakeSub,
+                    accent: quakeAccent,
                   ),
                 ),
               ],
@@ -455,13 +479,19 @@ class _ResultsScreenState extends State<ResultsScreen> {
           const SizedBox(height: 6),
           Text(
             main,
-            style: CiroType.h3(CiroColors.inkStrong).copyWith(fontSize: 14),
+            style: CiroType.h3(CiroColors.inkStrong).copyWith(
+              fontSize: 14,
+              height: 1.2,
+            ),
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 2),
           Text(
             sub,
-            style: CiroType.mono(accent, size: 10.5, w: FontWeight.w600),
+            style: CiroType.mono(accent, size: 10, w: FontWeight.w600)
+                .copyWith(height: 1.25),
+            maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
         ],
@@ -643,7 +673,20 @@ class _ResultsScreenState extends State<ResultsScreen> {
     final rd = a['route_data'];
     if (rd is! Map) return false;
     final alts = rd['alternatives'];
-    return alts is List && alts.isNotEmpty;
+    if (alts is! List || alts.isEmpty) return false;
+    // Require at least one alternative with a real distance & ETA. Bogus
+    // 0km / 0min loops from a same-origin-and-destination lookup are
+    // filtered out so we don't render an empty map.
+    for (final r in alts) {
+      if (r is Map) {
+        final d = r['distance_km'];
+        final t = r['eta_min'];
+        final dist = d is num ? d : 0;
+        final eta = t is num ? t : 0;
+        if (dist > 0.3 && eta > 0) return true;
+      }
+    }
+    return false;
   }
 
   Widget _routePanel(Map<String, dynamic> a) {
