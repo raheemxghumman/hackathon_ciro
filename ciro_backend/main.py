@@ -9,6 +9,8 @@ from mock_signals import (
     get_real_traffic,
     get_real_earthquake,
 )
+from tools.verification_tool import verify_incident
+from tools.maps_tool import geocode_location
 
 load_dotenv()
 
@@ -41,6 +43,26 @@ async def analyze(body: TextRequest):
         return await orchestrator.run_pipeline(body.text)
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.get("/verify")
+async def verify(location: str, event_type: str = "unknown"):
+    """Test the verification APIs directly.
+    Example: GET /verify?location=Tokyo&event_type=earthquake
+    """
+    geo = await geocode_location(location)
+    result = await verify_incident(
+        location=location,
+        event_type=event_type,
+        lat=geo.get("lat") if geo else None,
+        lng=geo.get("lng") if geo else None,
+    )
+    return {
+        "location": location,
+        "event_type": event_type,
+        "geocode": geo,
+        "verification": result,
+    }
 
 
 @app.get("/signals")

@@ -5,6 +5,7 @@ import asyncio
 from datetime import datetime
 from pydantic import BaseModel
 import crisis_agents
+from tools.verification_tool import verify_incident
 
 async def run_pipeline(text: str) -> dict:
     log_dir = "logs"
@@ -53,10 +54,26 @@ async def run_pipeline(text: str) -> dict:
     if not result2.get("requested_destination"):
         result2["requested_destination"] = result1.get("requested_destination")
 
-    # Plan Agent
+    # Verify Agent + Plan Agent run in parallel (both only need detect output)
+    geo = result1.get("geocode") or {}
     start_time = time.time()
-    result3 = await crisis_agents.plan_response(result2, country=country, province=province)
+    result_verify, result3 = await asyncio.gather(
+        verify_incident(
+            location=result2.get("location") or result1.get("location", ""),
+            event_type=result1.get("event_type", "unknown"),
+            lat=geo.get("lat"),
+            lng=geo.get("lng"),
+        ),
+        crisis_agents.plan_response(result2, country=country, province=province),
+    )
     duration = (time.time() - start_time) * 1000
+    log_step(
+        "Verify Agent",
+        "Event type + location",
+        result_verify.get("summary", ""),
+        list(result_verify.get("sources", {}).keys()),
+        duration,
+    )
     tools = ["maps_tool"] if any(a.get("action_type") == "traffic_reroute" for a in result3.get("actions", [])) else []
     log_step("Plan Agent", "Detected crisis severity", f"{len(result3.get('actions', []))} actions planned", tools, duration)
 
@@ -145,6 +162,7 @@ async def run_pipeline(text: str) -> dict:
         "detection": result2,
         "plan": result3,
         "execution": result4,
+        "verification": result_verify,
         "signals": {
             "weather": result1.get("weather_signal", {}),
             "traffic": result1.get("traffic_signal", {}),

@@ -53,6 +53,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   Map<String, dynamic> get _before => _asMap(_execution['before_state']);
   Map<String, dynamic> get _after => _asMap(_execution['after_state']);
+  Map<String, dynamic> get _verification => _asMap(widget.data['verification']);
 
   Color _sevColor(String s) {
     switch (s) {
@@ -159,6 +160,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
           children: [
             _crisisHeader(crisisType, severity, confidence, location),
             const SizedBox(height: 16),
+            if (_verification.isNotEmpty) ...[
+              _verificationCard(),
+              const SizedBox(height: 16),
+            ],
             if (_signals.isNotEmpty) ...[
               _signalsCard(),
               const SizedBox(height: 16),
@@ -299,6 +304,196 @@ class _ResultsScreenState extends State<ResultsScreen> {
               ],
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _verificationCard() {
+    final v = _verification;
+    final confidence  = (v['confidence']  as String?) ?? 'unverified';
+    final summary     = (v['summary']     as String?) ?? '';
+    final sources = _asMap(v['sources']);
+
+    Color accent;
+    Color accentBg;
+    String badge;
+    IconData badgeIcon;
+    switch (confidence) {
+      case 'high':
+        accent     = CiroColors.sevLow;
+        accentBg   = CiroColors.sevLowSoft;
+        badge      = 'CONFIRMED';
+        badgeIcon  = Icons.verified_rounded;
+        break;
+      case 'medium':
+        accent     = CiroColors.sevMed;
+        accentBg   = CiroColors.sevMedSoft;
+        badge      = 'LIKELY';
+        badgeIcon  = Icons.check_circle_outline_rounded;
+        break;
+      default:
+        accent     = CiroColors.inkMuted;
+        accentBg   = CiroColors.surfaceAlt;
+        badge      = 'UNVERIFIED';
+        badgeIcon  = Icons.help_outline_rounded;
+    }
+
+    // Top GDELT articles (if any)
+    final gdelt    = _asMap(sources['GDELT']);
+    final rawItems = gdelt['items'];
+    final articles = rawItems is List
+        ? rawItems.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+        : <Map<String, dynamic>>[];
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: ciroCard(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header row
+          Row(
+            children: [
+              Icon(Icons.fact_check_outlined, size: 14, color: accent),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text('INCIDENT VERIFICATION',
+                    style: CiroType.eyebrow(CiroColors.inkStrong)),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: accentBg,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(badgeIcon, size: 11, color: accent),
+                    const SizedBox(width: 4),
+                    Text(badge,
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: accent,
+                          letterSpacing: 0.5,
+                        )),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(height: 1, color: CiroColors.hairlineSoft),
+          const SizedBox(height: 10),
+          // Summary text
+          Text(summary, style: CiroType.bodyTight(CiroColors.inkBody)),
+          const SizedBox(height: 12),
+          // Source chips
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: sources.entries.map((entry) {
+              final name    = entry.key;
+              final data    = _asMap(entry.value);
+              final matched = data['matched'] == true;
+              final skipped = data['skipped'] == true;
+              final count   = data['count'];
+              final chipColor = skipped
+                  ? CiroColors.inkMuted
+                  : matched
+                      ? accent
+                      : CiroColors.inkMuted;
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: matched ? accent.withValues(alpha: 0.10) : CiroColors.surfaceAlt,
+                  border: Border.all(
+                    color: matched
+                        ? accent.withValues(alpha: 0.30)
+                        : CiroColors.hairlineSoft,
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      skipped
+                          ? Icons.remove_circle_outline
+                          : matched
+                              ? Icons.check_rounded
+                              : Icons.close_rounded,
+                      size: 11,
+                      color: chipColor,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      name,
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: chipColor,
+                      ),
+                    ),
+                    if (!skipped && count != null) ...[
+                      const SizedBox(width: 3),
+                      Text(
+                        '($count)',
+                        style: TextStyle(fontSize: 9.5, color: CiroColors.inkMuted),
+                      ),
+                    ],
+                  ],
+                ),
+              );
+            }).toList(),
+          ),
+          // GDELT article previews
+          if (articles.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(height: 1, color: CiroColors.hairlineSoft),
+            const SizedBox(height: 10),
+            Text('NEWS SOURCES', style: CiroType.eyebrow(CiroColors.inkMuted)),
+            const SizedBox(height: 8),
+            ...articles.take(2).map((a) {
+              final title  = a['title']?.toString()  ?? '';
+              final source = a['source']?.toString() ?? '';
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      margin: const EdgeInsets.only(top: 6),
+                      width: 4,
+                      height: 4,
+                      decoration: BoxDecoration(
+                          color: accent, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (title.isNotEmpty)
+                            Text(title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: CiroType.small(CiroColors.inkBody)
+                                    .copyWith(fontSize: 11.5)),
+                          if (source.isNotEmpty)
+                            Text(source,
+                                style: CiroType.small(CiroColors.inkMuted)
+                                    .copyWith(fontSize: 10)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
         ],
       ),
     );
@@ -901,20 +1096,26 @@ class _ResultsScreenState extends State<ResultsScreen> {
   }
 
   Widget _metaChip(IconData icon, String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: CiroColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 12, color: CiroColors.inkMuted),
-          const SizedBox(width: 5),
-          Text(text,
-              style: CiroType.small(CiroColors.inkBody).copyWith(fontSize: 11.5)),
-        ],
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 260),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: CiroColors.surfaceAlt,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: CiroColors.inkMuted),
+            const SizedBox(width: 5),
+            Flexible(
+              child: Text(text,
+                  overflow: TextOverflow.ellipsis,
+                  style: CiroType.small(CiroColors.inkBody).copyWith(fontSize: 11.5)),
+            ),
+          ],
+        ),
       ),
     );
   }
