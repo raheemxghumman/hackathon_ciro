@@ -1,6 +1,6 @@
 <div align="center">
 
-# CIRO — Crisis Intelligence & Response Orchestrator
+# ITLA — Crisis Intelligence & Response Orchestrator
 
 ### Real-time AI-powered crisis detection, reasoning, and response planning
 
@@ -25,7 +25,7 @@
 ---
 
 ## 🌍 Project Overview
-**CIRO (Crisis Intelligence & Response Orchestrator)** is a real-time crisis analysis platform that combines a Flutter client with a FastAPI backend, orchestrated through Google ADK + Gemini 2.5 Flash, with Groq fallback support.
+**ITLA (Crisis Intelligence & Response Orchestrator)** is a real-time crisis analysis platform that combines a Flutter client with a FastAPI backend, orchestrated through Google ADK + Gemini 2.5 Flash, with Groq fallback support.
 
 - Repository: [GitHub](https://github.com/AbdulRaheem/ciro_project)
 - Live Web App: [https://hackathon-496621.web.app](https://hackathon-496621.web.app)
