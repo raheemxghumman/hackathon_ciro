@@ -462,6 +462,107 @@ Return ONLY valid JSON, no markdown, no explanation:
                         action["route_origin"] = display_origin
                         action["route_destination"] = display_destination
                         action["route_blocked_area"] = blocked
+
+        # Inferred coordinates
+        geo = origin_geo if 'origin_geo' in locals() and origin_geo else None
+        if geo:
+            coordinates = {"latitude": geo["lat"], "longitude": geo["lng"]}
+        else:
+            # Localized fallback grids based on location
+            loc_lower = blocked.lower()
+            if "lahore" in loc_lower:
+                coordinates = {"latitude": 31.5204, "longitude": 74.3587}
+            elif "karachi" in loc_lower:
+                coordinates = {"latitude": 24.8607, "longitude": 67.0011}
+            elif "rawalpindi" in loc_lower:
+                coordinates = {"latitude": 33.5651, "longitude": 73.0169}
+            elif "peshawar" in loc_lower:
+                coordinates = {"latitude": 34.0151, "longitude": 71.5249}
+            else:
+                coordinates = {"latitude": 33.6844, "longitude": 73.0479}
+
+        # Resource scaling based on crisis type & severity
+        crisis_type = (detection.get("crisis_type") or "unknown").lower()
+        severity = detection.get("severity") or "Medium"
+
+        mult = 1
+        if severity == "Low":
+            mult = 1
+        elif severity == "Medium":
+            mult = 2
+        elif severity == "High":
+            mult = 4
+        elif severity == "Critical":
+            mult = 6
+
+        base_res = {
+            "ambulances": 1,
+            "rescue_teams": 1,
+            "police_units": 1,
+            "drones": 1,
+            "field_teams": 1,
+            "shelters": 0,
+            "generators": 0,
+            "water_tankers": 0,
+        }
+
+        if any(w in crisis_type or w in blocked.lower() for w in ["flood", "rain", "water"]):
+            base_res.update({
+                "rescue_teams": 3, "ambulances": 2, "water_tankers": 2,
+                "drones": 2, "shelters": 1, "generators": 1
+            })
+        elif "fire" in crisis_type or "smoke" in crisis_type:
+            base_res.update({
+                "rescue_teams": 3, "ambulances": 2, "police_units": 2, "water_tankers": 2
+            })
+        elif "earthquake" in crisis_type or "quake" in crisis_type:
+            base_res.update({
+                "rescue_teams": 4, "ambulances": 3, "shelters": 2, "generators": 2, "field_teams": 2
+            })
+        elif "accident" in crisis_type or "crash" in crisis_type:
+            base_res.update({"ambulances": 2, "police_units": 2, "rescue_teams": 1})
+        elif "unrest" in crisis_type or "riot" in crisis_type:
+            base_res.update({"police_units": 4, "field_teams": 2, "drones": 2})
+        elif "heatwave" in crisis_type or "garmi" in crisis_type:
+            base_res.update({"ambulances": 2, "water_tankers": 3, "field_teams": 2, "shelters": 1})
+
+        recommended_resources = {
+            k: max(1 if k in ["ambulances", "rescue_teams", "police_units"] else 0, v * mult)
+            for k, v in base_res.items()
+        }
+
+        # Dynamic stakeholder messages
+        event_label = crisis_type.replace("_", " ").title()
+        public_msg = f"SAFETY ADVISORY: A {severity} {event_label} has been reported in {blocked}. Please avoid the area, stay indoors, and follow emergency routes."
+        police_msg = f"TACTICAL COMMAND: Establish a secure perimeter around {blocked}. Control traffic access and coordinate with local emergency responders."
+        hospitals_msg = f"TRAUMA READINESS: Stand by for potential casualties from {blocked} due to {severity} {event_label}. Ensure emergency rooms are prepared."
+        utility_msg = f"INFRASTRUCTURE SAFEGUARD: Inspect power lines, water supplies, and gas mains near {blocked} for potential outages or safety hazards."
+        transport_msg = f"TRAFFIC REROUTING: Implement diversions around {blocked}. Reroute public transit and alert commuters of major delays."
+        media_msg = f"PRESS BRIEF: CIRO is coordinating a multi-agency response to a {severity} {event_label} in {blocked}. Rescue and utility operations are underway."
+
+        if "flood" in crisis_type or "rain" in crisis_type:
+            public_msg = f"FLOOD WARNING: Severe flooding reported in {blocked}. Move to higher ground, avoid driving through water, and stay alert."
+            utility_msg = f"POWER & WATER CONTROL: Secure electrical substations and monitor sewage drainage networks in {blocked} to prevent contamination."
+        elif "fire" in crisis_type:
+            public_msg = f"FIRE ADVISORY: Heavy smoke and fire at {blocked}. Evacuate adjacent buildings immediately, close windows, and yield to fire tenders."
+            hospitals_msg = f"BURN UNIT WARNING: Prepare burn treatment facilities and maximize emergency supply intake for fire victims from {blocked}."
+        elif "earthquake" in crisis_type:
+            public_msg = f"EARTHQUAKE ALERT: Tremors felt. Watch out for aftershocks. Stay away from damaged structures and utility poles."
+            utility_msg = f"GAS & GRID SHUTDOWN: Execute emergency gas valve shutdowns in {blocked} to prevent post-quake fires."
+
+        stakeholder_messages = {
+            "public": public_msg,
+            "police": police_msg,
+            "hospitals": hospitals_msg,
+            "utility": utility_msg,
+            "transport": transport_msg,
+            "media": media_msg,
+        }
+
+        result["coordinates"] = coordinates
+        result["recommended_resources"] = recommended_resources
+        result["stakeholder_messages"] = stakeholder_messages
+
         return result
     except Exception:
         print(f"ERROR in plan_response: {traceback.format_exc()}")
@@ -518,7 +619,66 @@ Return ONLY valid JSON, no markdown, no explanation:
   ],
   "simulation_summary": "2 sentence summary of overall outcome"
 }}"""
-        return parse_json(call_llm(prompt))
+        result = parse_json(call_llm(prompt))
+
+        # dynamic simulation data based on plan / severity
+        actions = plan.get("actions", [])
+        strategy = plan.get("overall_strategy", "").lower()
+        
+        # Calculate baseline affected population based on severity/actions count
+        has_critical = any(a.get("priority") == "P1" for a in actions)
+        
+        base_pop = 1200
+        severity_label = "Medium"
+        if "critical" in strategy or has_critical:
+            base_pop = 8000
+            severity_label = "Critical"
+        elif "high" in strategy:
+            base_pop = 4000
+            severity_label = "High"
+        elif "low" in strategy:
+            base_pop = 150
+            severity_label = "Low"
+
+        mitigation_ratio = 0.88 # 88% saved
+        lives_saved = int(base_pop * mitigation_ratio)
+        affected_after = int(base_pop * (1 - mitigation_ratio))
+
+        # Side effects text based on crisis characteristics
+        traffic_text = f"Perimeter blockades and rerouting around the incident area have caused moderate congestion on secondary arterials."
+        logistical_text = "Emergency supply lines established. Specialized equipment dispatch has temporarily prioritized public safety vehicles."
+        economic_text = "Local businesses in the immediate sector have temporarily suspended operations to ensure citizen safety."
+        environmental_text = "Resource deployment has successfully mitigated chemical/hazard spill risks, preserving local ecosystems."
+
+        if any(w in strategy or w in location_label.lower() for w in ["flood", "rain", "water"]):
+            traffic_text = f"Water logging has caused major gridlock. Alternates are handling redirected flow, with a 25-minute travel delay."
+            environmental_text = "High-volume pumps successfully routed stagnant water to main storm basins, reducing soil erosion."
+        elif "fire" in strategy:
+            traffic_text = f"Emergency lanes reserved for fire tenders. Smoke plumes have caused slight visibility reductions on nearby streets."
+            environmental_text = "Controlled flame suppression prevents forest/brush spread. Water runoff has been chemically neutralized."
+        elif "earthquake" in strategy or "quake" in strategy:
+            traffic_text = f"Debris clearance in progress. Rerouted heavy machinery is causing localized crawl speeds."
+            logistical_text = "Air rescue prioritizations have delayed non-critical commercial shipments. Field medical shelters are active."
+
+        simulation_data = {
+            "before": {
+                "affected_population": base_pop,
+                "severity": severity_label
+            },
+            "after": {
+                "affected_population": affected_after,
+                "severity": "Low"
+            },
+            "lives_saved": lives_saved,
+            "side_effects": {
+                "traffic": traffic_text,
+                "logistical": logistical_text,
+                "economic": economic_text,
+                "environmental": environmental_text,
+            }
+        }
+        result["simulation_data"] = simulation_data
+        return result
     except Exception:
         print(f"ERROR in execute_actions: {traceback.format_exc()}")
         return {"before_state": {}, "after_state": {}, "execution_log": [], "simulation_summary": "Error"}

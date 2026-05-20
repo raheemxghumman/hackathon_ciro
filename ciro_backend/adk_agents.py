@@ -85,6 +85,9 @@ async def plan_response_tool(_stage_input: str = "plan") -> dict:
             "actions_count": len(result.get("actions", [])),
             "response_strategy": result.get("response_strategy", ""),
             "agencies": [a.get("responsible_agency", "") for a in result.get("actions", [])[:3]],
+            "coordinates": result.get("coordinates"),
+            "recommended_resources": result.get("recommended_resources"),
+            "stakeholder_messages": result.get("stakeholder_messages"),
         }
     except Exception as e:
         print(f"[plan_response_tool] Error: {e}")
@@ -115,6 +118,7 @@ async def execute_response_tool(_stage_input: str = "execute") -> dict:
             "status": "complete",
             "simulation_summary": result.get("simulation_summary", ""),
             "tickets_created": len(result.get("execution_log", [])),
+            "simulation_data": result.get("simulation_data"),
         }
     except Exception as e:
         print(f"[execute_response_tool] Error: {e}")

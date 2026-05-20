@@ -28,6 +28,16 @@ class _InputScreenState extends State<InputScreen> {
   bool _incidentsLoading = false;
   final Set<String> _generatingIds = {};
 
+  bool _judgeDemoMode = false;
+  String _selectedCity = 'Islamabad';
+  final Map<String, String> _cityScenarios = {
+    'Islamabad': 'Critical flood alert in Sector G-10, Islamabad. Heavy monsoon rain has caused urban flooding, submerging streets and trapping several vehicles.',
+    'Lahore': 'High-severity accident on Mall Road, Lahore near the canal. A cargo truck collided with two passenger vehicles, causing major traffic blockages and multiple injuries.',
+    'Karachi': 'Critical fire hazard at a chemical warehouse in Clifton Block 5, Karachi. Thick toxic smoke is spreading to adjacent residential blocks and commercial buildings.',
+    'Rawalpindi': 'Severe civil unrest and protests reported on Murree Road, Rawalpindi. Road blockages on major intersections with heavy traffic disruption.',
+    'Peshawar': 'High-magnitude earthquake tremors felt in University Road area, Peshawar. Panic among residents, potential damage to older structures reported.',
+  };
+
   @override
   void initState() {
     super.initState();
@@ -233,6 +243,7 @@ class _InputScreenState extends State<InputScreen> {
               padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
               sliver: SliverList(
                 delegate: SliverChildListDelegate([
+                  _demoModePanel(),
                   _liveSignalsPanel(
                     condition: condition, alert: alert, temp: temp,
                     congestion: congestion, pct: pct, trafficLive: trafficLive,
@@ -255,6 +266,166 @@ class _InputScreenState extends State<InputScreen> {
                 ]),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── demo mode ────────────────────────────────────────────────────────────
+
+  Widget _demoModePanel() {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 350),
+      curve: Curves.easeInOut,
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: _judgeDemoMode 
+            ? CiroColors.surfaceAlt.withValues(alpha: 0.8) 
+            : CiroColors.surfaceAlt.withValues(alpha: 0.3),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _judgeDemoMode 
+              ? CiroColors.brand.withValues(alpha: 0.5) 
+              : CiroColors.inkSubtle.withValues(alpha: 0.1),
+          width: 1.5,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    const Text('🧪', style: TextStyle(fontSize: 20)),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Custom Signal Injection (Judge Demo Mode)',
+                      style: CiroType.body(CiroColors.inkStrong).copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                Switch(
+                  value: _judgeDemoMode,
+                  activeTrackColor: CiroColors.brand,
+                  onChanged: (val) {
+                    setState(() {
+                      _judgeDemoMode = val;
+                      if (_judgeDemoMode) {
+                        _controller.text = _cityScenarios[_selectedCity]!;
+                      }
+                    });
+                  },
+                ),
+              ],
+            ),
+            if (_judgeDemoMode) ...[
+              const SizedBox(height: 14),
+              const Divider(color: Colors.white24, height: 1),
+              const SizedBox(height: 14),
+              Text(
+                'Target City in Pakistan:',
+                style: CiroType.small(CiroColors.inkMuted).copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: CiroColors.canvas,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: CiroColors.inkSubtle.withValues(alpha: 0.2)),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedCity,
+                    dropdownColor: CiroColors.canvas,
+                    isExpanded: true,
+                    icon: const Icon(Icons.arrow_drop_down, color: CiroColors.brand),
+                    items: _cityScenarios.keys.map((String city) {
+                      return DropdownMenuItem<String>(
+                        value: city,
+                        child: Text(
+                          city,
+                          style: CiroType.body(CiroColors.inkStrong).copyWith(fontWeight: FontWeight.w500),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (newCity) {
+                      if (newCity != null) {
+                        setState(() {
+                          _selectedCity = newCity;
+                          _controller.text = _cityScenarios[_selectedCity]!;
+                        });
+                      }
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Injected Crisis Payload:',
+                style: CiroType.small(CiroColors.inkMuted).copyWith(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _controller,
+                maxLines: 3,
+                style: CiroType.body(CiroColors.inkStrong),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: CiroColors.canvas,
+                  contentPadding: const EdgeInsets.all(12),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: const BorderSide(color: CiroColors.brand, width: 1.5),
+                  ),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(10),
+                    borderSide: BorderSide(color: CiroColors.inkSubtle.withValues(alpha: 0.2)),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: CiroColors.brand,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: _isLoading ? null : _onAnalyze,
+                  child: _isLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.science_outlined, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Run Lab Test',
+                              style: CiroType.body(Colors.white).copyWith(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

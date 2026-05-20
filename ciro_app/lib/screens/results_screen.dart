@@ -15,6 +15,8 @@ class ResultsScreen extends StatefulWidget {
 
 class _ResultsScreenState extends State<ResultsScreen> {
   bool _archived = false;
+  int _activeTabIndex = 0;
+  String _activeStakeholder = 'public';
 
   Map<String, dynamic> _asMap(dynamic v) {
     if (v is Map) return Map<String, dynamic>.from(v);
@@ -187,6 +189,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
           children: [
             _crisisHeader(crisisType, severity, confidence, location),
+            const SizedBox(height: 16),
+            _aagahMapsAndResourceModule(location),
+            const SizedBox(height: 16),
+            _aagahTabbedDashboardModule(),
             const SizedBox(height: 16),
             if (_verification.isNotEmpty) ...[
               _verificationCard(),
@@ -1605,6 +1611,445 @@ class _ResultsScreenState extends State<ResultsScreen> {
       ],
     );
   }
+
+  // ============== AAGAH DASHBOARD MODULES ==============
+
+  Widget _aagahMapsAndResourceModule(String locationName) {
+    final coords = _plan['coordinates'] as Map? ?? {};
+    final lat = coords['latitude'] != null ? (coords['latitude'] is num ? (coords['latitude'] as num).toDouble() : 33.6844) : 33.6844;
+    final lng = coords['longitude'] != null ? (coords['longitude'] is num ? (coords['longitude'] as num).toDouble() : 73.0479) : 73.0479;
+    final rec = _plan['recommended_resources'] as Map? ?? {};
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.map_outlined, size: 16, color: CiroColors.brand),
+            const SizedBox(width: 6),
+            Expanded(child: SectionLabel('AAGAH LIVE ACTIVE COORDINATES SCAN')),
+          ],
+        ),
+        const SizedBox(height: 10),
+        AagahMapCanvas(latitude: lat, longitude: lng, location: locationName),
+        const SizedBox(height: 20),
+        _resourceGrid(rec),
+      ],
+    );
+  }
+
+  Widget _resourceGrid(Map<dynamic, dynamic> rec) {
+    final list = [
+      _resourceItem('Ambulances', rec['ambulances'] ?? 0, '🚑', Colors.redAccent),
+      _resourceItem('Rescue Teams', rec['rescue_teams'] ?? 0, '🧑‍🚒', Colors.orangeAccent),
+      _resourceItem('Police Units', rec['police_units'] ?? 0, '🚔', Colors.blueAccent),
+      _resourceItem('Drones', rec['drones'] ?? 0, '🛸', Colors.cyanAccent),
+      _resourceItem('Field Teams', rec['field_teams'] ?? 0, '👥', Colors.tealAccent),
+      _resourceItem('Shelters', rec['shelters'] ?? 0, '⛺', Colors.greenAccent),
+      _resourceItem('Generators', rec['generators'] ?? 0, '⚡', Colors.yellowAccent),
+      _resourceItem('Water Tankers', rec['water_tankers'] ?? 0, '🚛', Colors.indigoAccent),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.dashboard_customize_outlined, size: 16, color: CiroColors.brand),
+            const SizedBox(width: 6),
+            Expanded(child: SectionLabel('AAGAH RECOMMENDED DISPATCH RESOURCES')),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: list.sublist(0, 4).map((w) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: w))).toList(),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: list.sublist(4, 8).map((w) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: w))).toList(),
+        ),
+      ],
+    );
+  }
+
+  Widget _resourceItem(String label, dynamic count, String emoji, Color accentColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        color: CiroColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: CiroColors.inkSubtle.withValues(alpha: 0.08)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.02),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 22)),
+          const SizedBox(height: 6),
+          Text(
+            count.toString(),
+            style: CiroType.h2(CiroColors.inkStrong).copyWith(fontSize: 16),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: CiroType.mono(CiroColors.inkMuted, size: 8, w: FontWeight.w600),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _aagahTabbedDashboardModule() {
+    final sim = _execution['simulation_data'] as Map? ?? {};
+    final side = sim['side_effects'] as Map? ?? {};
+    final stake = _plan['stakeholder_messages'] as Map? ?? {};
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _tabSwitcher(),
+        const SizedBox(height: 16),
+        _activeTabIndex == 0 
+            ? _tab1Content(sim, side) 
+            : _tab2Content(stake),
+      ],
+    );
+  }
+
+  Widget _tabSwitcher() {
+    return Container(
+      decoration: BoxDecoration(
+        color: CiroColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: CiroColors.inkSubtle.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _tabItem(0, 'Interactive Simulation', Icons.speed_outlined),
+          ),
+          Expanded(
+            child: _tabItem(1, 'Stakeholder Communications', Icons.forum_outlined),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tabItem(int index, String label, IconData icon) {
+    final active = _activeTabIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _activeTabIndex = index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: active ? CiroColors.brand : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: active ? Colors.white : CiroColors.inkBody, size: 16),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: CiroType.body(active ? Colors.white : CiroColors.inkStrong).copyWith(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _tab1Content(Map<dynamic, dynamic> sim, Map<dynamic, dynamic> side) {
+    final before = sim['before'] as Map? ?? {};
+    final after = sim['after'] as Map? ?? {};
+    final saved = sim['lives_saved'] ?? 0;
+
+    return Column(
+      key: const ValueKey('tab1'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _stateCard('Before Mitigation', before['affected_population'] ?? '—', before['severity'] ?? '—', Colors.redAccent, Icons.error_outline),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _stateCard('Projected 24h After', after['affected_population'] ?? '—', after['severity'] ?? '—', Colors.greenAccent, Icons.check_circle_outline),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [CiroColors.brand, CiroColors.brand.withValues(alpha: 0.8)],
+            ),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: CiroColors.brand.withValues(alpha: 0.25),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              )
+            ],
+          ),
+          child: Row(
+            children: [
+              const Text('💖', style: TextStyle(fontSize: 28)),
+              const SizedBox(width: 12),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'LIVES SAVED / MITIGATED',
+                    style: CiroType.mono(Colors.white70, size: 9, w: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$saved Citizens Secure',
+                    style: CiroType.h2(Colors.white).copyWith(fontSize: 18),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            const Icon(Icons.analytics_outlined, size: 15, color: CiroColors.brand),
+            const SizedBox(width: 6),
+            Expanded(child: SectionLabel('SYSTEMIC SIDE EFFECTS ANALYSIS')),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _sideEffectItem('Traffic & Commutes', side['traffic'] ?? 'Minor perimeter blockades.', Icons.traffic_outlined, Colors.blueAccent),
+        _sideEffectItem('Logistical Networks', side['logistical'] ?? 'Emergency supply corridors active.', Icons.local_shipping_outlined, Colors.orangeAccent),
+        _sideEffectItem('Economic Footprint', side['economic'] ?? 'Immediate sectors suspended.', Icons.monetization_on_outlined, Colors.teal),
+        _sideEffectItem('Environmental Impact', side['environmental'] ?? 'Particulate smoke monitored.', Icons.eco_outlined, Colors.greenAccent),
+      ],
+    );
+  }
+
+  Widget _stateCard(String title, dynamic pop, String sev, Color accent, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: CiroColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: CiroColors.inkSubtle.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: accent, size: 14),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  style: CiroType.mono(CiroColors.inkMuted, size: 9, w: FontWeight.bold),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Pop: $pop',
+            style: CiroType.body(CiroColors.inkStrong).copyWith(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            children: [
+              Text(
+                'Severity: ',
+                style: CiroType.small(CiroColors.inkMuted),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  sev,
+                  style: CiroType.mono(accent, size: 9, w: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _sideEffectItem(String label, String text, IconData icon, Color color) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: CiroColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: CiroColors.inkSubtle.withValues(alpha: 0.06)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: color, size: 18),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: CiroType.body(CiroColors.inkStrong).copyWith(fontWeight: FontWeight.bold, fontSize: 12),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  text,
+                  style: CiroType.small(CiroColors.inkBody),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tab2Content(Map<dynamic, dynamic> stake) {
+    final channels = [
+      {'key': 'public', 'label': 'Public Alert', 'icon': Icons.public_outlined, 'color': Colors.redAccent},
+      {'key': 'police', 'label': 'Police Dispatch', 'icon': Icons.local_police_outlined, 'color': Colors.blueAccent},
+      {'key': 'hospitals', 'label': 'Medical/Trauma', 'icon': Icons.local_hospital_outlined, 'color': Colors.purpleAccent},
+      {'key': 'utility', 'label': 'Utilities/Gas', 'icon': Icons.construction_outlined, 'color': Colors.amberAccent},
+      {'key': 'transport', 'label': 'Transit/Reroute', 'icon': Icons.traffic_outlined, 'color': Colors.cyanAccent},
+      {'key': 'media', 'label': 'Press Release', 'icon': Icons.newspaper_outlined, 'color': Colors.tealAccent},
+    ];
+
+    final activeChannel = channels.firstWhere((c) => c['key'] == _activeStakeholder, orElse: () => channels[0]);
+    final alertText = stake[_activeStakeholder] ?? 'No advisory broadcast.';
+
+    return Column(
+      key: const ValueKey('tab2'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: channels.map((c) {
+              final active = _activeStakeholder == c['key'];
+              final color = c['color'] as Color;
+              return Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: ChoiceChip(
+                  label: Row(
+                    children: [
+                      Icon(c['icon'] as IconData, size: 14, color: active ? Colors.white : color),
+                      const SizedBox(width: 6),
+                      Text(
+                        c['label'] as String,
+                        style: CiroType.body(active ? Colors.white : CiroColors.inkStrong).copyWith(fontWeight: FontWeight.bold, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                  selected: active,
+                  selectedColor: color,
+                  backgroundColor: CiroColors.surfaceAlt,
+                  side: BorderSide(color: active ? Colors.transparent : CiroColors.inkSubtle.withValues(alpha: 0.1)),
+                  onSelected: (_) {
+                    setState(() => _activeStakeholder = c['key'] as String);
+                  },
+                ),
+              );
+            }).toList(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: (activeChannel['color'] as Color).withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: (activeChannel['color'] as Color).withValues(alpha: 0.25),
+              width: 1.5,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(activeChannel['icon'] as IconData, color: activeChannel['color'] as Color, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'BROADCAST LIVE: ${(activeChannel['label'] as String).toUpperCase()}',
+                    style: CiroType.mono(activeChannel['color'] as Color, size: 10, w: FontWeight.bold),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                alertText,
+                style: CiroType.body(CiroColors.inkStrong).copyWith(
+                  fontSize: 13.5,
+                  height: 1.4,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Container(
+                    width: 6, height: 6,
+                    decoration: BoxDecoration(
+                      color: activeChannel['color'] as Color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    'BROADCAST SECURED',
+                    style: CiroType.mono(CiroColors.inkMuted, size: 8, w: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _RingPainter extends CustomPainter {
@@ -1647,4 +2092,301 @@ class _RingPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _RingPainter old) =>
       old.progress != progress || old.color != color;
+}
+
+// ============== INTERACTIVE VECTOR MAP CANVAS ==============
+
+class AagahMapCanvas extends StatefulWidget {
+  final double latitude;
+  final double longitude;
+  final String location;
+
+  const AagahMapCanvas({
+    super.key,
+    required this.latitude,
+    required this.longitude,
+    required this.location,
+  });
+
+  @override
+  State<AagahMapCanvas> createState() => _AagahMapCanvasState();
+}
+
+class _AagahMapCanvasState extends State<AagahMapCanvas> with SingleTickerProviderStateMixin {
+  double _zoom = 14.5;
+  double _panX = 0.0;
+  double _panY = 0.0;
+  late AnimationController _pulseController;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 250,
+      decoration: BoxDecoration(
+        color: const Color(0xFF0F172A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: CiroColors.brand.withValues(alpha: 0.3), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: CiroColors.brand.withValues(alpha: 0.1),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          )
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: Stack(
+          children: [
+            GestureDetector(
+              onPanUpdate: (details) {
+                setState(() {
+                  _panX += details.delta.dx;
+                  _panY += details.delta.dy;
+                });
+              },
+              child: AnimatedBuilder(
+                animation: _pulseController,
+                builder: (context, _) {
+                  return CustomPaint(
+                    size: Size.infinite,
+                    painter: VectorMapPainter(
+                      latitude: widget.latitude,
+                      longitude: widget.longitude,
+                      locationName: widget.location,
+                      zoom: _zoom,
+                      panX: _panX,
+                      panY: _panY,
+                      pulseVal: _pulseController.value,
+                    ),
+                  );
+                },
+              ),
+            ),
+            Positioned(
+              top: 12,
+              left: 12,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xE60F172A),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.location.toUpperCase(),
+                      style: CiroType.mono(CiroColors.brand, size: 10, w: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'LAT: ${widget.latitude.toStringAsFixed(4)} · LNG: ${widget.longitude.toStringAsFixed(4)}',
+                      style: CiroType.mono(Colors.white70, size: 9),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 12,
+              right: 12,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _mapButton(Icons.add, () => setState(() => _zoom = math.min(18.0, _zoom + 0.5))),
+                  const SizedBox(height: 6),
+                  _mapButton(Icons.remove, () => setState(() => _zoom = math.max(10.0, _zoom - 0.5))),
+                  const SizedBox(height: 6),
+                  _mapButton(Icons.my_location, () => setState(() {
+                    _panX = 0.0;
+                    _panY = 0.0;
+                    _zoom = 14.5;
+                  })),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 12,
+              right: 12,
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: const BoxDecoration(
+                  color: Color(0xE60F172A),
+                  shape: BoxShape.circle,
+                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                ),
+                child: const Center(
+                  child: Icon(Icons.navigation_outlined, color: Colors.white70, size: 16),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _mapButton(IconData icon, VoidCallback onTap) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: const Color(0xE60F172A),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white10),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: onTap,
+          child: Center(
+            child: Icon(icon, color: Colors.white, size: 18),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class VectorMapPainter extends CustomPainter {
+  final double latitude;
+  final double longitude;
+  final String locationName;
+  final double zoom;
+  final double panX;
+  final double panY;
+  final double pulseVal;
+
+  VectorMapPainter({
+    required this.latitude,
+    required this.longitude,
+    required this.locationName,
+    required this.zoom,
+    required this.panX,
+    required this.panY,
+    required this.pulseVal,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2 + panX, size.height / 2 + panY);
+
+    final gridPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.04)
+      ..strokeWidth = 1.0;
+
+    final contourPaint = Paint()
+      ..color = CiroColors.brand.withValues(alpha: 0.08)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
+
+    final roadPaint = Paint()
+      ..color = Colors.white.withValues(alpha: 0.09)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.0;
+
+    final routePaint = Paint()
+      ..color = Colors.green.withValues(alpha: 0.6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.5;
+
+    final routeBlockedPaint = Paint()
+      ..color = CiroColors.sevHigh.withValues(alpha: 0.6)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 3.5;
+
+    const step = 40.0;
+    for (double x = 0; x < size.width; x += step) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (double y = 0; y < size.height; y += step) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final radiusBase = 60.0 * (zoom - 10.0);
+    for (int i = 1; i <= 4; i++) {
+      canvas.drawCircle(center, radiusBase * i * 0.4, contourPaint);
+    }
+
+    canvas.drawLine(
+      Offset(0, center.dy - 20),
+      Offset(size.width, center.dy - 20),
+      roadPaint,
+    );
+    canvas.drawLine(
+      Offset(center.dx - 40, 0),
+      Offset(center.dx - 40, size.height),
+      roadPaint,
+    );
+
+    final pathGreen = Path();
+    pathGreen.moveTo(center.dx - 120, center.dy + 80);
+    pathGreen.quadraticBezierTo(
+      center.dx - 50, center.dy + 120,
+      center.dx + 40, center.dy + 30,
+    );
+    pathGreen.lineTo(center.dx + 120, center.dy - 40);
+    canvas.drawPath(pathGreen, routePaint);
+
+    final pathRed = Path();
+    pathRed.moveTo(center.dx - 40, center.dy - 60);
+    pathRed.lineTo(center.dx - 40, center.dy + 60);
+    canvas.drawPath(pathRed, routeBlockedPaint);
+
+    final pulsePaint = Paint()
+      ..color = CiroColors.sevHigh.withValues(alpha: 0.3 * (1.0 - pulseVal))
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, 12.0 + (pulseVal * 36.0), pulsePaint);
+
+    final pinPaint = Paint()
+      ..color = CiroColors.sevHigh
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, 8.0, pinPaint);
+
+    final innerPinPaint = Paint()
+      ..color = Colors.white
+      ..style = PaintingStyle.fill;
+    canvas.drawCircle(center, 3.5, innerPinPaint);
+
+    final sweepPaint = Paint()
+      ..color = CiroColors.brand.withValues(alpha: 0.15)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.5;
+    canvas.drawLine(
+      center,
+      Offset(
+        center.dx + 100 * math.cos(pulseVal * 2 * math.pi),
+        center.dy + 100 * math.sin(pulseVal * 2 * math.pi),
+      ),
+      sweepPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant VectorMapPainter oldDelegate) {
+    return oldDelegate.zoom != zoom ||
+        oldDelegate.panX != panX ||
+        oldDelegate.panY != panY ||
+        oldDelegate.pulseVal != pulseVal;
+  }
 }
