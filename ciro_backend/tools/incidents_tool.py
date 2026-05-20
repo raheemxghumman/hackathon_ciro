@@ -1,68 +1,23 @@
 """
-Global crisis incidents feed — merges ReliefWeb, GDACS, and USGS into a
+Global crisis incidents feed — merges GDACS RSS, USGS, and NASA EONET into a
 single ranked list for the /incidents endpoint.
+
+Note: ReliefWeb v1 was decommissioned (410 Gone); v2 requires an approved appname.
+GDACS JSON API returned 404 after a format change; RSS feed is used instead.
 """
 import asyncio
-import httpx
+import xml.etree.ElementTree as ET
+from email.utils import parsedate_to_datetime
 from datetime import datetime, timedelta, timezone
 
-RELIEFWEB_URL = "https://api.reliefweb.int/v1/disasters"
-GDACS_URL     = "https://www.gdacs.org/gdacsapi/api/events/geteventlist/EVENTS"
+import httpx
+
+GDACS_RSS_URL = "https://www.gdacs.org/xml/rss.xml"
 USGS_URL      = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_week.geojson"
+EONET_URL     = "https://eonet.gsfc.nasa.gov/api/v3/events?status=open&limit=15"
 
-# ReliefWeb disaster type → CIRO crisis_type
-_RW_TYPE_MAP = {
-    "Flood":              "flooding",
-    "Flash Flood":        "flooding",
-    "Tropical Cyclone":   "flooding",
-    "Typhoon":            "flooding",
-    "Hurricane":          "flooding",
-    "Storm Surge":        "flooding",
-    "Earthquake":         "earthquake",
-    "Tsunami":            "earthquake",
-    "Volcano":            "hazmat",
-    "Wild Fire":          "fire",
-    "Wildfire":           "fire",
-    "Forest Fires":       "fire",
-    "Drought":            "heatwave",
-    "Cold Wave":          "heatwave",
-    "Heat Wave":          "heatwave",
-    "Epidemic":           "medical",
-    "Disease":            "medical",
-    "Conflict":           "civil_unrest",
-    "Landslide":          "accident",
-    "Mudslide":           "accident",
-    "Chemical Hazard":    "hazmat",
-    "Industrial Accident":"hazmat",
-    "Power Outage":       "utility_outage",
-}
+_GDACS_NS = {"gdacs": "http://www.gdacs.org", "geo": "http://www.w3.org/2003/01/geo/wgs84_pos#"}
 
-# ReliefWeb disaster type → severity
-_RW_SEVERITY = {
-    "Earthquake":       "Critical",
-    "Tsunami":          "Critical",
-    "Tropical Cyclone": "Critical",
-    "Typhoon":          "Critical",
-    "Hurricane":        "Critical",
-    "Flood":            "High",
-    "Flash Flood":      "High",
-    "Volcano":          "High",
-    "Wild Fire":        "High",
-    "Wildfire":         "High",
-    "Forest Fires":     "High",
-    "Epidemic":         "High",
-    "Conflict":         "High",
-    "Landslide":        "High",
-    "Mudslide":         "High",
-    "Drought":          "Medium",
-    "Cold Wave":        "Medium",
-    "Heat Wave":        "Medium",
-    "Disease":          "Medium",
-    "Chemical Hazard":  "High",
-    "Power Outage":     "Medium",
-}
-
-# GDACS event code → CIRO crisis_type
 _GDACS_TYPE_MAP = {
     "EQ": "earthquake",
     "TC": "flooding",
@@ -72,11 +27,26 @@ _GDACS_TYPE_MAP = {
     "DR": "heatwave",
 }
 
-# GDACS alert level → severity
 _GDACS_SEVERITY = {
     "Red":    "Critical",
     "Orange": "High",
     "Green":  "Medium",
+}
+
+_EONET_TYPE_MAP = {
+    "Wildfires":          "fire",
+    "Floods":             "flooding",
+    "Volcanoes":          "hazmat",
+    "Earthquakes":        "earthquake",
+    "Severe Storms":      "flooding",
+    "Drought":            "heatwave",
+    "Landslides":         "accident",
+    "Sea and Lake Ice":   "heatwave",
+    "Snow":               "heatwave",
+    "Dust and Haze":      "heatwave",
+    "Temperature Extreme":"heatwave",
+    "Manmade":            "accident",
+    "Water Color":        "hazmat",
 }
 
 _CRISIS_EMOJI = {
@@ -98,117 +68,57 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-async def _fetch_reliefweb(client: httpx.AsyncClient) -> list:
-    params = {
-        "appname": "ciro",
-        "profile": "list",
-        "preset":  "latest",
-        "slim":    "1",
-        "limit":   "10",
-        "fields[include][]": ["name", "date.created", "country", "type", "status"],
-    }
+async def _fetch_gdacs_rss(client: httpx.AsyncClient) -> list:
     try:
-        r = await client.get(RELIEFWEB_URL, params=params, timeout=10.0)
+        r = await client.get(GDACS_RSS_URL, timeout=10.0)
         r.raise_for_status()
-        data = r.json().get("data", [])
+        root = ET.fromstring(r.content)
     except Exception as e:
-        print(f"[incidents] ReliefWeb failed: {e}")
+        print(f"[incidents] GDACS RSS failed: {e}")
         return []
 
     incidents = []
-    for item in data:
-        fields  = item.get("fields", {})
-        name    = fields.get("name", "")
-        status  = fields.get("status", "")
-        if status not in ("ongoing", "alert", "current"):
+    for item in root.findall(".//item"):
+        alert  = item.findtext("gdacs:alertlevel", "Green", _GDACS_NS)
+        etype  = item.findtext("gdacs:eventtype",  "",      _GDACS_NS)
+        country = item.findtext("gdacs:country",   "Unknown", _GDACS_NS)
+        title  = item.findtext("title", "")
+        pub    = item.findtext("pubDate", "")
+        event_id = item.findtext("gdacs:eventid",  "", _GDACS_NS)
+        episode  = item.findtext("gdacs:episodeid","", _GDACS_NS)
+
+        # Only include Orange/Red and non-drought Green events
+        if alert == "Green" and etype == "DR":
             continue
-
-        countries = fields.get("country", [])
-        country   = countries[0].get("name", "Unknown") if countries else "Unknown"
-
-        types    = fields.get("type", [])
-        rw_type  = types[0].get("name", "") if types else ""
-        crisis_t = _RW_TYPE_MAP.get(rw_type, "unknown")
-        severity = _RW_SEVERITY.get(rw_type, "Medium")
-
-        date_created = (fields.get("date") or {}).get("created", _now_iso())
-
-        emoji = _CRISIS_EMOJI.get(crisis_t, "🆘")
-        report_text = (
-            f"{rw_type or crisis_t.title()} emergency in {country}. "
-            f"{name}. Ongoing situation requires coordinated response. "
-            f"Assess severity and deploy appropriate emergency resources."
-        )
-
-        incidents.append({
-            "id":         f"rw_{item.get('id', '')}",
-            "title":      name,
-            "location":   country,
-            "country":    country,
-            "crisis_type": crisis_t,
-            "severity":   severity,
-            "date_iso":   date_created,
-            "source":     "ReliefWeb",
-            "emoji":      emoji,
-            "description": f"{rw_type} · {status} · {country}",
-            "report_text": report_text,
-        })
-
-    return incidents
-
-
-async def _fetch_gdacs(client: httpx.AsyncClient) -> list:
-    from_d = datetime.utcnow() - timedelta(days=30)
-    to_d   = datetime.utcnow()
-    params = {
-        "eventtypes": "EQ,TC,FL,VO,WF",
-        "fromDate":   from_d.strftime("%Y-%m-%d"),
-        "toDate":     to_d.strftime("%Y-%m-%d"),
-    }
-    try:
-        r = await client.get(GDACS_URL, params=params, timeout=10.0)
-        r.raise_for_status()
-        features = r.json().get("features", [])
-    except Exception as e:
-        print(f"[incidents] GDACS failed: {e}")
-        return []
-
-    incidents = []
-    for f in features[:10]:
-        props     = f.get("properties", {})
-        etype     = props.get("eventtype", "")
-        country   = props.get("country", "Unknown")
-        alert     = props.get("alertlevel", "Green")
-        name      = props.get("eventname") or props.get("name") or f"{etype} event in {country}"
-        date_str  = props.get("todate") or props.get("fromdate") or _now_iso()
-        episode   = props.get("episodeid", "")
-        event_id  = props.get("eventid", "")
 
         crisis_t = _GDACS_TYPE_MAP.get(etype, "unknown")
         severity = _GDACS_SEVERITY.get(alert, "Medium")
         emoji    = _CRISIS_EMOJI.get(crisis_t, "🆘")
 
         try:
-            date_iso = datetime.fromisoformat(date_str.replace("Z", "+00:00")).isoformat()
+            date_iso = parsedate_to_datetime(pub).isoformat() if pub else _now_iso()
         except Exception:
             date_iso = _now_iso()
 
+        # Take first country when multiple listed
+        first_country = country.split(",")[0].strip()
+
         report_text = (
-            f"{crisis_t.title()} emergency in {country}. {name}. "
+            f"{crisis_t.title()} emergency in {first_country}. {title}. "
             f"GDACS {alert} alert issued. Assess the situation and coordinate emergency response."
         )
 
         incidents.append({
             "id":          f"gdacs_{episode}_{event_id}",
-            "title":       name,
-            "location":    country,
-            "country":     country,
+            "title":       title,
+            "location":    first_country,
+            "country":     first_country,
             "crisis_type": crisis_t,
             "severity":    severity,
             "date_iso":    date_iso,
             "source":      "GDACS",
             "emoji":       emoji,
-            "description": f"{alert} alert · {etype} · {country}",
+            "description": f"{alert} alert · {etype} · {first_country}",
             "report_text": report_text,
         })
 
@@ -226,12 +136,12 @@ async def _fetch_usgs(client: httpx.AsyncClient) -> list:
 
     incidents = []
     for f in features[:10]:
-        props   = f.get("properties", {})
-        title   = props.get("title", "")
-        mag     = props.get("mag")
-        place   = props.get("place", "")
-        ts_ms   = props.get("time", 0)
-        eq_id   = f.get("id", "")
+        props  = f.get("properties", {})
+        title  = props.get("title", "")
+        mag    = props.get("mag")
+        place  = props.get("place", "")
+        ts_ms  = props.get("time", 0)
+        eq_id  = f.get("id", "")
 
         if mag is None:
             continue
@@ -275,8 +185,54 @@ async def _fetch_usgs(client: httpx.AsyncClient) -> list:
     return incidents
 
 
+async def _fetch_eonet(client: httpx.AsyncClient) -> list:
+    try:
+        r = await client.get(EONET_URL, timeout=10.0)
+        r.raise_for_status()
+        events = r.json().get("events", [])
+    except Exception as e:
+        print(f"[incidents] NASA EONET failed: {e}")
+        return []
+
+    incidents = []
+    for e in events[:10]:
+        title  = e.get("title", "")
+        cats   = e.get("categories", [])
+        cat    = cats[0].get("title", "") if cats else ""
+        geoms  = e.get("geometry", [])
+        geo    = geoms[-1] if geoms else {}
+        date_iso = geo.get("date", _now_iso())
+        event_id = e.get("id", "")
+
+        crisis_t = _EONET_TYPE_MAP.get(cat, "unknown")
+        emoji    = _CRISIS_EMOJI.get(crisis_t, "🆘")
+
+        # Infer country from title best-effort
+        country = title.split(",")[-1].strip() if "," in title else "Global"
+
+        report_text = (
+            f"{cat} event: {title}. "
+            f"NASA EONET open event. Assess impact and coordinate appropriate emergency response."
+        )
+
+        incidents.append({
+            "id":          f"eonet_{event_id}",
+            "title":       title,
+            "location":    country,
+            "country":     country,
+            "crisis_type": crisis_t,
+            "severity":    "Medium",
+            "date_iso":    date_iso,
+            "source":      "NASA EONET",
+            "emoji":       emoji,
+            "description": f"{cat} · NASA EONET",
+            "report_text": report_text,
+        })
+
+    return incidents
+
+
 def _extract_country_from_place(place: str) -> str:
-    """Best-effort country extraction from USGS place string like '10km NE of City, Country'."""
     if not place:
         return "Unknown"
     parts = place.split(",")
@@ -292,9 +248,9 @@ async def fetch_latest_incidents(limit: int = 5) -> list:
     """Fetch, merge, deduplicate, and rank latest global crisis incidents."""
     async with httpx.AsyncClient() as client:
         results = await asyncio.gather(
-            _fetch_reliefweb(client),
-            _fetch_gdacs(client),
+            _fetch_gdacs_rss(client),
             _fetch_usgs(client),
+            _fetch_eonet(client),
             return_exceptions=True,
         )
 
@@ -307,8 +263,7 @@ async def fetch_latest_incidents(limit: int = 5) -> list:
     all_incidents.sort(
         key=lambda x: (
             _SEVERITY_ORDER.get(x.get("severity", "Medium"), 2),
-            -(0 if not x.get("date_iso") else
-              _parse_ts(x["date_iso"])),
+            -(0 if not x.get("date_iso") else _parse_ts(x["date_iso"])),
         )
     )
 

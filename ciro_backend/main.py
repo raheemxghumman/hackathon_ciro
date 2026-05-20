@@ -55,11 +55,18 @@ async def analyze_adk(body: TextRequest):
         return await adk_runner.run_adk_pipeline(body.text)
     except Exception as adk_err:
         print(f"[ADK] Pipeline failed ({adk_err}), falling back to Groq pipeline")
+        adk_err_str = str(adk_err)
+        if "429" in adk_err_str or "RESOURCE_EXHAUSTED" in adk_err_str or "quota" in adk_err_str.lower():
+            fallback_reason = "Groq LLaMA-3.3-70B (Gemini daily quota exceeded — ADK fallback active)"
+        elif "GOOGLE_API_KEY" in adk_err_str or "API key" in adk_err_str:
+            fallback_reason = "Groq LLaMA-3.3-70B (ADK unavailable — invalid GOOGLE_API_KEY)"
+        else:
+            fallback_reason = f"Groq LLaMA-3.3-70B (ADK error: {type(adk_err).__name__})"
         try:
             result = await orchestrator.run_pipeline(body.text)
-            result["framework"]  = "Groq LLaMA-3.3-70B (ADK unavailable — set GOOGLE_API_KEY from aistudio.google.com)"
-            result["adk_error"]  = str(adk_err)
-            result["adk_trace"]  = {"framework": "fallback", "reason": str(adk_err)}
+            result["framework"]  = fallback_reason
+            result["adk_error"]  = adk_err_str
+            result["adk_trace"]  = {"framework": "fallback", "reason": adk_err_str}
             return result
         except Exception as e:
             return {"error": str(e)}
