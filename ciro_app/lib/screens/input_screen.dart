@@ -299,15 +299,20 @@ class _InputScreenState extends State<InputScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    const Text('🧪', style: TextStyle(fontSize: 20)),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Custom Signal Injection (Judge Demo Mode)',
-                      style: CiroType.body(CiroColors.inkStrong).copyWith(fontWeight: FontWeight.bold),
-                    ),
-                  ],
+                Flexible(
+                  child: Row(
+                    children: [
+                      const Text('🧪', style: TextStyle(fontSize: 20)),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          'Custom Signal Injection (Judge Demo Mode)',
+                          style: CiroType.body(CiroColors.inkStrong).copyWith(fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 Switch(
                   value: _judgeDemoMode,

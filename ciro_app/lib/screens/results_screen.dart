@@ -15,7 +15,6 @@ class ResultsScreen extends StatefulWidget {
 
 class _ResultsScreenState extends State<ResultsScreen> {
   bool _archived = false;
-  int _activeTabIndex = 0;
   String _activeStakeholder = 'public';
 
   Map<String, dynamic> _asMap(dynamic v) {
@@ -55,7 +54,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   Map<String, dynamic> get _before => _asMap(_execution['before_state']);
   Map<String, dynamic> get _after => _asMap(_execution['after_state']);
-  Map<String, dynamic> get _verification => _asMap(widget.data['verification']);
 
   Color _sevColor(String s) {
     switch (s) {
@@ -194,10 +192,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
             const SizedBox(height: 16),
             _aagahTabbedDashboardModule(),
             const SizedBox(height: 16),
-            if (_verification.isNotEmpty) ...[
-              _verificationCard(),
-              const SizedBox(height: 16),
-            ],
             if (_signals.isNotEmpty) ...[
               _signalsCard(),
               const SizedBox(height: 16),
@@ -338,196 +332,6 @@ class _ResultsScreenState extends State<ResultsScreen> {
               ],
             ),
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _verificationCard() {
-    final v = _verification;
-    final confidence  = (v['confidence']  as String?) ?? 'unverified';
-    final summary     = (v['summary']     as String?) ?? '';
-    final sources = _asMap(v['sources']);
-
-    Color accent;
-    Color accentBg;
-    String badge;
-    IconData badgeIcon;
-    switch (confidence) {
-      case 'high':
-        accent     = CiroColors.sevLow;
-        accentBg   = CiroColors.sevLowSoft;
-        badge      = 'CONFIRMED';
-        badgeIcon  = Icons.verified_rounded;
-        break;
-      case 'medium':
-        accent     = CiroColors.sevMed;
-        accentBg   = CiroColors.sevMedSoft;
-        badge      = 'LIKELY';
-        badgeIcon  = Icons.check_circle_outline_rounded;
-        break;
-      default:
-        accent     = CiroColors.inkMuted;
-        accentBg   = CiroColors.surfaceAlt;
-        badge      = 'UNVERIFIED';
-        badgeIcon  = Icons.help_outline_rounded;
-    }
-
-    // Top GDELT articles (if any)
-    final gdelt    = _asMap(sources['GDELT']);
-    final rawItems = gdelt['items'];
-    final articles = rawItems is List
-        ? rawItems.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
-        : <Map<String, dynamic>>[];
-
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-      decoration: ciroCard(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header row
-          Row(
-            children: [
-              Icon(Icons.fact_check_outlined, size: 14, color: accent),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text('INCIDENT VERIFICATION',
-                    style: CiroType.eyebrow(CiroColors.inkStrong)),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: accentBg,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(badgeIcon, size: 11, color: accent),
-                    const SizedBox(width: 4),
-                    Text(badge,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: accent,
-                          letterSpacing: 0.5,
-                        )),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Container(height: 1, color: CiroColors.hairlineSoft),
-          const SizedBox(height: 10),
-          // Summary text
-          Text(summary, style: CiroType.bodyTight(CiroColors.inkBody)),
-          const SizedBox(height: 12),
-          // Source chips
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: sources.entries.map((entry) {
-              final name    = entry.key;
-              final data    = _asMap(entry.value);
-              final matched = data['matched'] == true;
-              final skipped = data['skipped'] == true;
-              final count   = data['count'];
-              final chipColor = skipped
-                  ? CiroColors.inkMuted
-                  : matched
-                      ? accent
-                      : CiroColors.inkMuted;
-              return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: matched ? accent.withValues(alpha: 0.10) : CiroColors.surfaceAlt,
-                  border: Border.all(
-                    color: matched
-                        ? accent.withValues(alpha: 0.30)
-                        : CiroColors.hairlineSoft,
-                  ),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      skipped
-                          ? Icons.remove_circle_outline
-                          : matched
-                              ? Icons.check_rounded
-                              : Icons.close_rounded,
-                      size: 11,
-                      color: chipColor,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      name,
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w600,
-                        color: chipColor,
-                      ),
-                    ),
-                    if (!skipped && count != null) ...[
-                      const SizedBox(width: 3),
-                      Text(
-                        '($count)',
-                        style: TextStyle(fontSize: 9.5, color: CiroColors.inkMuted),
-                      ),
-                    ],
-                  ],
-                ),
-              );
-            }).toList(),
-          ),
-          // GDELT article previews
-          if (articles.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Container(height: 1, color: CiroColors.hairlineSoft),
-            const SizedBox(height: 10),
-            Text('NEWS SOURCES', style: CiroType.eyebrow(CiroColors.inkMuted)),
-            const SizedBox(height: 8),
-            ...articles.take(2).map((a) {
-              final title  = a['title']?.toString()  ?? '';
-              final source = a['source']?.toString() ?? '';
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      margin: const EdgeInsets.only(top: 6),
-                      width: 4,
-                      height: 4,
-                      decoration: BoxDecoration(
-                          color: accent, shape: BoxShape.circle),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (title.isNotEmpty)
-                            Text(title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: CiroType.small(CiroColors.inkBody)
-                                    .copyWith(fontSize: 11.5)),
-                          if (source.isNotEmpty)
-                            Text(source,
-                                style: CiroType.small(CiroColors.inkMuted)
-                                    .copyWith(fontSize: 10)),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }),
-          ],
         ],
       ),
     );
@@ -1615,9 +1419,17 @@ class _ResultsScreenState extends State<ResultsScreen> {
   // ============== AAGAH DASHBOARD MODULES ==============
 
   Widget _aagahMapsAndResourceModule(String locationName) {
+    final geocode = _asMap(_ingestion['geocode']);
     final coords = _plan['coordinates'] as Map? ?? {};
-    final lat = coords['latitude'] != null ? (coords['latitude'] is num ? (coords['latitude'] as num).toDouble() : 33.6844) : 33.6844;
-    final lng = coords['longitude'] != null ? (coords['longitude'] is num ? (coords['longitude'] as num).toDouble() : 73.0479) : 73.0479;
+    double lat = 0.0, lng = 0.0;
+    // Prefer ingestion geocode (actual geocoded location) over plan coordinates
+    if (geocode['lat'] is num && geocode['lng'] is num) {
+      lat = (geocode['lat'] as num).toDouble();
+      lng = (geocode['lng'] as num).toDouble();
+    } else if (coords['latitude'] is num && coords['longitude'] is num) {
+      lat = (coords['latitude'] as num).toDouble();
+      lng = (coords['longitude'] as num).toDouble();
+    }
     final rec = _plan['recommended_resources'] as Map? ?? {};
 
     return Column(
@@ -1627,11 +1439,11 @@ class _ResultsScreenState extends State<ResultsScreen> {
           children: [
             const Icon(Icons.map_outlined, size: 16, color: CiroColors.brand),
             const SizedBox(width: 6),
-            Expanded(child: SectionLabel('AAGAH LIVE ACTIVE COORDINATES SCAN')),
+            Expanded(child: SectionLabel('LIVE INCIDENT COORDINATES')),
           ],
         ),
         const SizedBox(height: 10),
-        AagahMapCanvas(latitude: lat, longitude: lng, location: locationName),
+        IncidentMapView(latitude: lat, longitude: lng, location: locationName),
         const SizedBox(height: 20),
         _resourceGrid(rec),
       ],
@@ -1640,14 +1452,14 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   Widget _resourceGrid(Map<dynamic, dynamic> rec) {
     final list = [
-      _resourceItem('Ambulances', rec['ambulances'] ?? 0, '🚑', Colors.redAccent),
-      _resourceItem('Rescue Teams', rec['rescue_teams'] ?? 0, '🧑‍🚒', Colors.orangeAccent),
-      _resourceItem('Police Units', rec['police_units'] ?? 0, '🚔', Colors.blueAccent),
-      _resourceItem('Drones', rec['drones'] ?? 0, '🛸', Colors.cyanAccent),
-      _resourceItem('Field Teams', rec['field_teams'] ?? 0, '👥', Colors.tealAccent),
-      _resourceItem('Shelters', rec['shelters'] ?? 0, '⛺', Colors.greenAccent),
-      _resourceItem('Generators', rec['generators'] ?? 0, '⚡', Colors.yellowAccent),
-      _resourceItem('Water Tankers', rec['water_tankers'] ?? 0, '🚛', Colors.indigoAccent),
+      _resourceItem('Ambulances',   rec['ambulances']   ?? 0, Icons.emergency_rounded,         const Color(0xFFE53935)),
+      _resourceItem('Rescue Teams', rec['rescue_teams'] ?? 0, Icons.fire_truck_outlined,        const Color(0xFFE8845E)),
+      _resourceItem('Police Units', rec['police_units'] ?? 0, Icons.local_police_outlined,      const Color(0xFF1A73E8)),
+      _resourceItem('Drones',       rec['drones']       ?? 0, Icons.airplanemode_active_rounded, const Color(0xFF00ACC1)),
+      _resourceItem('Field Teams',  rec['field_teams']  ?? 0, Icons.groups_rounded,             const Color(0xFF00897B)),
+      _resourceItem('Shelters',     rec['shelters']     ?? 0, Icons.home_work_outlined,         CiroColors.sevLow),
+      _resourceItem('Generators',   rec['generators']   ?? 0, Icons.electric_bolt_rounded,      const Color(0xFFF9A825)),
+      _resourceItem('Water Tankers',rec['water_tankers']?? 0, Icons.local_shipping_outlined,    const Color(0xFF6E59E0)),
     ];
 
     return Column(
@@ -1657,7 +1469,7 @@ class _ResultsScreenState extends State<ResultsScreen> {
           children: [
             const Icon(Icons.dashboard_customize_outlined, size: 16, color: CiroColors.brand),
             const SizedBox(width: 6),
-            Expanded(child: SectionLabel('AAGAH RECOMMENDED DISPATCH RESOURCES')),
+            Expanded(child: SectionLabel('RECOMMENDED DISPATCH RESOURCES')),
           ],
         ),
         const SizedBox(height: 10),
@@ -1672,25 +1484,26 @@ class _ResultsScreenState extends State<ResultsScreen> {
     );
   }
 
-  Widget _resourceItem(String label, dynamic count, String emoji, Color accentColor) {
+  Widget _resourceItem(String label, dynamic count, IconData icon, Color accentColor) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(
         color: CiroColors.surfaceAlt,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: CiroColors.inkSubtle.withValues(alpha: 0.08)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.02),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          )
-        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(emoji, style: const TextStyle(fontSize: 22)),
+          Container(
+            width: 36, height: 36,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, size: 18, color: accentColor),
+          ),
           const SizedBox(height: 6),
           Text(
             count.toString(),
@@ -1710,251 +1523,36 @@ class _ResultsScreenState extends State<ResultsScreen> {
   }
 
   Widget _aagahTabbedDashboardModule() {
-    final sim = _execution['simulation_data'] as Map? ?? {};
-    final side = sim['side_effects'] as Map? ?? {};
     final stake = _plan['stakeholder_messages'] as Map? ?? {};
-
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _tabSwitcher(),
-        const SizedBox(height: 16),
-        _activeTabIndex == 0 
-            ? _tab1Content(sim, side) 
-            : _tab2Content(stake),
-      ],
-    );
-  }
-
-  Widget _tabSwitcher() {
-    return Container(
-      decoration: BoxDecoration(
-        color: CiroColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: CiroColors.inkSubtle.withValues(alpha: 0.1)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: _tabItem(0, 'Interactive Simulation', Icons.speed_outlined),
-          ),
-          Expanded(
-            child: _tabItem(1, 'Stakeholder Communications', Icons.forum_outlined),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _tabItem(int index, String label, IconData icon) {
-    final active = _activeTabIndex == index;
-    return GestureDetector(
-      onTap: () => setState(() => _activeTabIndex = index),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: active ? CiroColors.brand : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: active ? Colors.white : CiroColors.inkBody, size: 16),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: CiroType.body(active ? Colors.white : CiroColors.inkStrong).copyWith(fontWeight: FontWeight.bold, fontSize: 12),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _tab1Content(Map<dynamic, dynamic> sim, Map<dynamic, dynamic> side) {
-    final before = sim['before'] as Map? ?? {};
-    final after = sim['after'] as Map? ?? {};
-    final saved = sim['lives_saved'] ?? 0;
-
-    return Column(
-      key: const ValueKey('tab1'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Expanded(
-              child: _stateCard('Before Mitigation', before['affected_population'] ?? '—', before['severity'] ?? '—', Colors.redAccent, Icons.error_outline),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _stateCard('Projected 24h After', after['affected_population'] ?? '—', after['severity'] ?? '—', Colors.greenAccent, Icons.check_circle_outline),
-            ),
+            const Icon(Icons.forum_outlined, size: 16, color: CiroColors.brand),
+            const SizedBox(width: 6),
+            Expanded(child: SectionLabel('STAKEHOLDER COMMUNICATIONS')),
           ],
         ),
         const SizedBox(height: 12),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [CiroColors.brand, CiroColors.brand.withValues(alpha: 0.8)],
-            ),
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: CiroColors.brand.withValues(alpha: 0.25),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
-              )
-            ],
-          ),
-          child: Row(
-            children: [
-              const Text('💖', style: TextStyle(fontSize: 28)),
-              const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'LIVES SAVED / MITIGATED',
-                    style: CiroType.mono(Colors.white70, size: 9, w: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '$saved Citizens Secure',
-                    style: CiroType.h2(Colors.white).copyWith(fontSize: 18),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            const Icon(Icons.analytics_outlined, size: 15, color: CiroColors.brand),
-            const SizedBox(width: 6),
-            Expanded(child: SectionLabel('SYSTEMIC SIDE EFFECTS ANALYSIS')),
-          ],
-        ),
-        const SizedBox(height: 10),
-        _sideEffectItem('Traffic & Commutes', side['traffic'] ?? 'Minor perimeter blockades.', Icons.traffic_outlined, Colors.blueAccent),
-        _sideEffectItem('Logistical Networks', side['logistical'] ?? 'Emergency supply corridors active.', Icons.local_shipping_outlined, Colors.orangeAccent),
-        _sideEffectItem('Economic Footprint', side['economic'] ?? 'Immediate sectors suspended.', Icons.monetization_on_outlined, Colors.teal),
-        _sideEffectItem('Environmental Impact', side['environmental'] ?? 'Particulate smoke monitored.', Icons.eco_outlined, Colors.greenAccent),
+        _tab2Content(stake),
       ],
-    );
-  }
-
-  Widget _stateCard(String title, dynamic pop, String sev, Color accent, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: CiroColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: CiroColors.inkSubtle.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: accent, size: 14),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  title,
-                  style: CiroType.mono(CiroColors.inkMuted, size: 9, w: FontWeight.bold),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Pop: $pop',
-            style: CiroType.body(CiroColors.inkStrong).copyWith(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: [
-              Text(
-                'Severity: ',
-                style: CiroType.small(CiroColors.inkMuted),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  sev,
-                  style: CiroType.mono(accent, size: 9, w: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _sideEffectItem(String label, String text, IconData icon, Color color) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: CiroColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: CiroColors.inkSubtle.withValues(alpha: 0.06)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(icon, color: color, size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: CiroType.body(CiroColors.inkStrong).copyWith(fontWeight: FontWeight.bold, fontSize: 12),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  text,
-                  style: CiroType.small(CiroColors.inkBody),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 
   Widget _tab2Content(Map<dynamic, dynamic> stake) {
     final channels = [
-      {'key': 'public', 'label': 'Public Alert', 'icon': Icons.public_outlined, 'color': Colors.redAccent},
-      {'key': 'police', 'label': 'Police Dispatch', 'icon': Icons.local_police_outlined, 'color': Colors.blueAccent},
-      {'key': 'hospitals', 'label': 'Medical/Trauma', 'icon': Icons.local_hospital_outlined, 'color': Colors.purpleAccent},
-      {'key': 'utility', 'label': 'Utilities/Gas', 'icon': Icons.construction_outlined, 'color': Colors.amberAccent},
-      {'key': 'transport', 'label': 'Transit/Reroute', 'icon': Icons.traffic_outlined, 'color': Colors.cyanAccent},
-      {'key': 'media', 'label': 'Press Release', 'icon': Icons.newspaper_outlined, 'color': Colors.tealAccent},
+      {'key': 'public',    'label': 'Public Alert',    'icon': Icons.public_outlined,          'color': const Color(0xFFE53935)},
+      {'key': 'police',    'label': 'Police Dispatch', 'icon': Icons.local_police_outlined,     'color': const Color(0xFF1A73E8)},
+      {'key': 'hospitals', 'label': 'Medical/Trauma',  'icon': Icons.local_hospital_outlined,   'color': const Color(0xFF6E59E0)},
+      {'key': 'utility',   'label': 'Utilities',       'icon': Icons.construction_outlined,     'color': CiroColors.sevMed},
+      {'key': 'transport', 'label': 'Transit',         'icon': Icons.traffic_outlined,          'color': const Color(0xFF00ACC1)},
+      {'key': 'media',     'label': 'Press Release',   'icon': Icons.newspaper_outlined,        'color': const Color(0xFF00897B)},
     ];
 
     final activeChannel = channels.firstWhere((c) => c['key'] == _activeStakeholder, orElse: () => channels[0]);
-    final alertText = stake[_activeStakeholder] ?? 'No advisory broadcast.';
+    final alertText = (stake[_activeStakeholder] ?? 'No advisory broadcast.').toString();
+    final activeColor = activeChannel['color'] as Color;
 
     return Column(
       key: const ValueKey('tab2'),
@@ -1967,81 +1565,85 @@ class _ResultsScreenState extends State<ResultsScreen> {
               final active = _activeStakeholder == c['key'];
               final color = c['color'] as Color;
               return Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: ChoiceChip(
-                  label: Row(
-                    children: [
-                      Icon(c['icon'] as IconData, size: 14, color: active ? Colors.white : color),
-                      const SizedBox(width: 6),
-                      Text(
-                        c['label'] as String,
-                        style: CiroType.body(active ? Colors.white : CiroColors.inkStrong).copyWith(fontWeight: FontWeight.bold, fontSize: 11),
+                padding: const EdgeInsets.only(right: 8),
+                child: GestureDetector(
+                  onTap: () => setState(() => _activeStakeholder = c['key'] as String),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: active ? color : CiroColors.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: active ? color : CiroColors.hairline,
+                        width: active ? 1.5 : 1.0,
                       ),
-                    ],
+                      boxShadow: active ? [BoxShadow(color: color.withValues(alpha: 0.20), blurRadius: 8, offset: const Offset(0, 3))] : CiroShadow.card,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(c['icon'] as IconData, size: 13, color: active ? Colors.white : color),
+                        const SizedBox(width: 6),
+                        Text(
+                          c['label'] as String,
+                          style: CiroType.mono(active ? Colors.white : CiroColors.inkStrong, size: 11, w: FontWeight.w700),
+                        ),
+                      ],
+                    ),
                   ),
-                  selected: active,
-                  selectedColor: color,
-                  backgroundColor: CiroColors.surfaceAlt,
-                  side: BorderSide(color: active ? Colors.transparent : CiroColors.inkSubtle.withValues(alpha: 0.1)),
-                  onSelected: (_) {
-                    setState(() => _activeStakeholder = c['key'] as String);
-                  },
                 ),
               );
             }).toList(),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
         AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
+          duration: const Duration(milliseconds: 250),
           width: double.infinity,
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           decoration: BoxDecoration(
-            color: (activeChannel['color'] as Color).withValues(alpha: 0.08),
+            color: activeColor.withValues(alpha: 0.06),
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(
-              color: (activeChannel['color'] as Color).withValues(alpha: 0.25),
-              width: 1.5,
-            ),
+            border: Border.all(color: activeColor.withValues(alpha: 0.20), width: 1.5),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  Icon(activeChannel['icon'] as IconData, color: activeChannel['color'] as Color, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    'BROADCAST LIVE: ${(activeChannel['label'] as String).toUpperCase()}',
-                    style: CiroType.mono(activeChannel['color'] as Color, size: 10, w: FontWeight.bold),
+                  Container(
+                    width: 28, height: 28,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: activeColor.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(activeChannel['icon'] as IconData, color: activeColor, size: 14),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'BROADCAST LIVE: ${(activeChannel['label'] as String).toUpperCase()}',
+                      style: CiroType.mono(activeColor, size: 9.5, w: FontWeight.w700),
+                    ),
                   ),
                 ],
               ),
+              const SizedBox(height: 10),
+              Container(height: 1, color: activeColor.withValues(alpha: 0.12)),
               const SizedBox(height: 12),
               Text(
                 alertText,
-                style: CiroType.body(CiroColors.inkStrong).copyWith(
-                  fontSize: 13.5,
-                  height: 1.4,
-                  fontWeight: FontWeight.w500,
-                ),
+                style: CiroType.bodyTight(CiroColors.inkStrong).copyWith(height: 1.55),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Container(
-                    width: 6, height: 6,
-                    decoration: BoxDecoration(
-                      color: activeChannel['color'] as Color,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
+                  Container(width: 6, height: 6, decoration: BoxDecoration(color: activeColor, shape: BoxShape.circle)),
                   const SizedBox(width: 6),
-                  Text(
-                    'BROADCAST SECURED',
-                    style: CiroType.mono(CiroColors.inkMuted, size: 8, w: FontWeight.w600),
-                  ),
+                  Text('BROADCAST SECURED', style: CiroType.mono(CiroColors.inkMuted, size: 8, w: FontWeight.w600)),
                 ],
               ),
             ],
@@ -2094,14 +1696,14 @@ class _RingPainter extends CustomPainter {
       old.progress != progress || old.color != color;
 }
 
-// ============== INTERACTIVE VECTOR MAP CANVAS ==============
+// ============== INCIDENT MAP VIEW (OpenStreetMap tiles) ==============
 
-class AagahMapCanvas extends StatefulWidget {
+class IncidentMapView extends StatefulWidget {
   final double latitude;
   final double longitude;
   final String location;
 
-  const AagahMapCanvas({
+  const IncidentMapView({
     super.key,
     required this.latitude,
     required this.longitude,
@@ -2109,284 +1711,250 @@ class AagahMapCanvas extends StatefulWidget {
   });
 
   @override
-  State<AagahMapCanvas> createState() => _AagahMapCanvasState();
+  State<IncidentMapView> createState() => _IncidentMapViewState();
 }
 
-class _AagahMapCanvasState extends State<AagahMapCanvas> with SingleTickerProviderStateMixin {
-  double _zoom = 14.5;
-  double _panX = 0.0;
-  double _panY = 0.0;
-  late AnimationController _pulseController;
+class _IncidentMapViewState extends State<IncidentMapView> {
+  int _zoom = 13;
 
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat();
+  static int _lngX(double lng, int z) => ((lng + 180) / 360 * (1 << z)).floor();
+
+  static int _latY(double lat, int z) {
+    final r = lat * math.pi / 180;
+    return ((1 - math.log(math.tan(r) + 1 / math.cos(r)) / math.pi) / 2 * (1 << z)).floor();
   }
 
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
+  static double _lngFrac(double lng, int z) =>
+      (lng + 180) / 360 * (1 << z) - _lngX(lng, z);
+
+  static double _latFrac(double lat, int z) {
+    final r = lat * math.pi / 180;
+    final f = (1 - math.log(math.tan(r) + 1 / math.cos(r)) / math.pi) / 2 * (1 << z);
+    return f - f.floor();
   }
 
   @override
   Widget build(BuildContext context) {
+    final noCoords = widget.latitude == 0.0 && widget.longitude == 0.0;
+
     return Container(
       height: 250,
       decoration: BoxDecoration(
-        color: const Color(0xFF0F172A),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: CiroColors.brand.withValues(alpha: 0.3), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: CiroColors.brand.withValues(alpha: 0.1),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          )
-        ],
+        border: Border.all(color: CiroColors.hairline),
+        color: const Color(0xFFF2EFE9),
       ),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
-        child: Stack(
-          children: [
-            GestureDetector(
-              onPanUpdate: (details) {
-                setState(() {
-                  _panX += details.delta.dx;
-                  _panY += details.delta.dy;
-                });
-              },
-              child: AnimatedBuilder(
-                animation: _pulseController,
-                builder: (context, _) {
-                  return CustomPaint(
-                    size: Size.infinite,
-                    painter: VectorMapPainter(
-                      latitude: widget.latitude,
-                      longitude: widget.longitude,
-                      locationName: widget.location,
-                      zoom: _zoom,
-                      panX: _panX,
-                      panY: _panY,
-                      pulseVal: _pulseController.value,
-                    ),
-                  );
-                },
-              ),
-            ),
-            Positioned(
-              top: 12,
-              left: 12,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: const Color(0xE60F172A),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.white10),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
+        child: noCoords
+            ? _noLocationView()
+            : LayoutBuilder(builder: (_, constraints) {
+                final w = constraints.maxWidth;
+                final h = constraints.maxHeight;
+                final tw = w / 3;
+                final th = h / 3;
+                final cx = _lngX(widget.longitude, _zoom);
+                final cy = _latY(widget.latitude, _zoom);
+                final fx = _lngFrac(widget.longitude, _zoom);
+                final fy = _latFrac(widget.latitude, _zoom);
+                final pinX = tw * (1 + fx);
+                final pinY = th * (1 + fy);
+
+                return Stack(
+                  clipBehavior: Clip.hardEdge,
                   children: [
-                    Text(
-                      widget.location.toUpperCase(),
-                      style: CiroType.mono(CiroColors.brand, size: 10, w: FontWeight.bold),
+                    for (int r = 0; r < 3; r++)
+                      for (int c = 0; c < 3; c++)
+                        Positioned(
+                          left: c * tw,
+                          top: r * th,
+                          width: tw + 1,
+                          height: th + 1,
+                          child: Image.network(
+                            'https://tile.openstreetmap.org/$_zoom/${cx + c - 1}/${cy + r - 1}.png',
+                            fit: BoxFit.fill,
+                            headers: const {'User-Agent': 'CIRO-Crisis-Response-App/1.0'},
+                            errorBuilder: (_, __, ___) => Container(color: const Color(0xFFE8E0D4)),
+                          ),
+                        ),
+                    // Pulse ring at pin location
+                    Positioned(
+                      left: pinX - 20,
+                      top: pinY - 20,
+                      child: const _PulseRing(),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'LAT: ${widget.latitude.toStringAsFixed(4)} · LNG: ${widget.longitude.toStringAsFixed(4)}',
-                      style: CiroType.mono(Colors.white70, size: 9),
+                    // Pin marker
+                    Positioned(
+                      left: pinX - 10,
+                      top: pinY - 30,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 20, height: 20,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: CiroColors.sevHigh,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: Colors.white, width: 2),
+                              boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 6, offset: Offset(0, 2))],
+                            ),
+                            child: const Icon(Icons.warning_rounded, color: Colors.white, size: 11),
+                          ),
+                          Container(width: 2, height: 8, decoration: BoxDecoration(color: CiroColors.sevHigh, borderRadius: BorderRadius.circular(1))),
+                          Container(width: 6, height: 6, decoration: const BoxDecoration(color: CiroColors.sevHigh, shape: BoxShape.circle)),
+                        ],
+                      ),
+                    ),
+                    // Location label
+                    Positioned(
+                      top: 10, left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.93),
+                          borderRadius: BorderRadius.circular(8),
+                          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+                          border: Border.all(color: Colors.black.withValues(alpha: 0.06)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.location_on_rounded, color: CiroColors.sevHigh, size: 11),
+                            const SizedBox(width: 4),
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 180),
+                              child: Text(
+                                widget.location,
+                                style: CiroType.mono(CiroColors.inkStrong, size: 10, w: FontWeight.w700),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // Zoom controls (bottom-right)
+                    Positioned(
+                      bottom: 28, right: 8,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ZoomButton(
+                            icon: Icons.add,
+                            onTap: () => setState(() => _zoom = (_zoom + 1).clamp(10, 18)),
+                          ),
+                          const SizedBox(height: 4),
+                          _ZoomButton(
+                            icon: Icons.remove,
+                            onTap: () => setState(() => _zoom = (_zoom - 1).clamp(10, 18)),
+                          ),
+                        ],
+                      ),
+                    ),
+                    // OSM attribution (required by license)
+                    Positioned(
+                      bottom: 4, right: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.7),
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Text(
+                          '© OpenStreetMap contributors',
+                          style: CiroType.mono(CiroColors.inkMuted, size: 7.5),
+                        ),
+                      ),
                     ),
                   ],
-                ),
-              ),
-            ),
-            Positioned(
-              bottom: 12,
-              right: 12,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _mapButton(Icons.add, () => setState(() => _zoom = math.min(18.0, _zoom + 0.5))),
-                  const SizedBox(height: 6),
-                  _mapButton(Icons.remove, () => setState(() => _zoom = math.max(10.0, _zoom - 0.5))),
-                  const SizedBox(height: 6),
-                  _mapButton(Icons.my_location, () => setState(() {
-                    _panX = 0.0;
-                    _panY = 0.0;
-                    _zoom = 14.5;
-                  })),
-                ],
-              ),
-            ),
-            Positioned(
-              top: 12,
-              right: 12,
-              child: Container(
-                width: 32,
-                height: 32,
-                decoration: const BoxDecoration(
-                  color: Color(0xE60F172A),
-                  shape: BoxShape.circle,
-                  boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 4)],
-                ),
-                child: const Center(
-                  child: Icon(Icons.navigation_outlined, color: Colors.white70, size: 16),
-                ),
-              ),
-            ),
+                );
+              }),
+      ),
+    );
+  }
+
+  Widget _noLocationView() {
+    return Container(
+      color: CiroColors.surfaceAlt,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.location_off_outlined, size: 28, color: CiroColors.inkMuted),
+            const SizedBox(height: 8),
+            Text('Location coordinates unavailable', style: CiroType.small(CiroColors.inkMuted)),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _mapButton(IconData icon, VoidCallback onTap) {
-    return Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: const Color(0xE60F172A),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.white10),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(8),
-          onTap: onTap,
-          child: Center(
-            child: Icon(icon, color: Colors.white, size: 18),
-          ),
+class _ZoomButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _ZoomButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 28, height: 28,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.92),
+          borderRadius: BorderRadius.circular(6),
+          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 1))],
+          border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
         ),
+        child: Icon(icon, size: 16, color: CiroColors.inkStrong),
       ),
     );
   }
 }
 
-class VectorMapPainter extends CustomPainter {
-  final double latitude;
-  final double longitude;
-  final String locationName;
-  final double zoom;
-  final double panX;
-  final double panY;
-  final double pulseVal;
-
-  VectorMapPainter({
-    required this.latitude,
-    required this.longitude,
-    required this.locationName,
-    required this.zoom,
-    required this.panX,
-    required this.panY,
-    required this.pulseVal,
-  });
+class _PulseRing extends StatefulWidget {
+  const _PulseRing();
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2 + panX, size.height / 2 + panY);
+  State<_PulseRing> createState() => _PulseRingState();
+}
 
-    final gridPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.04)
-      ..strokeWidth = 1.0;
+class _PulseRingState extends State<_PulseRing> with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
 
-    final contourPaint = Paint()
-      ..color = CiroColors.brand.withValues(alpha: 0.08)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2;
-
-    final roadPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.09)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.0;
-
-    final routePaint = Paint()
-      ..color = Colors.green.withValues(alpha: 0.6)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.5;
-
-    final routeBlockedPaint = Paint()
-      ..color = CiroColors.sevHigh.withValues(alpha: 0.6)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3.5;
-
-    const step = 40.0;
-    for (double x = 0; x < size.width; x += step) {
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-    }
-    for (double y = 0; y < size.height; y += step) {
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
-    }
-
-    final radiusBase = 60.0 * (zoom - 10.0);
-    for (int i = 1; i <= 4; i++) {
-      canvas.drawCircle(center, radiusBase * i * 0.4, contourPaint);
-    }
-
-    canvas.drawLine(
-      Offset(0, center.dy - 20),
-      Offset(size.width, center.dy - 20),
-      roadPaint,
-    );
-    canvas.drawLine(
-      Offset(center.dx - 40, 0),
-      Offset(center.dx - 40, size.height),
-      roadPaint,
-    );
-
-    final pathGreen = Path();
-    pathGreen.moveTo(center.dx - 120, center.dy + 80);
-    pathGreen.quadraticBezierTo(
-      center.dx - 50, center.dy + 120,
-      center.dx + 40, center.dy + 30,
-    );
-    pathGreen.lineTo(center.dx + 120, center.dy - 40);
-    canvas.drawPath(pathGreen, routePaint);
-
-    final pathRed = Path();
-    pathRed.moveTo(center.dx - 40, center.dy - 60);
-    pathRed.lineTo(center.dx - 40, center.dy + 60);
-    canvas.drawPath(pathRed, routeBlockedPaint);
-
-    final pulsePaint = Paint()
-      ..color = CiroColors.sevHigh.withValues(alpha: 0.3 * (1.0 - pulseVal))
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(center, 12.0 + (pulseVal * 36.0), pulsePaint);
-
-    final pinPaint = Paint()
-      ..color = CiroColors.sevHigh
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(center, 8.0, pinPaint);
-
-    final innerPinPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill;
-    canvas.drawCircle(center, 3.5, innerPinPaint);
-
-    final sweepPaint = Paint()
-      ..color = CiroColors.brand.withValues(alpha: 0.15)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    canvas.drawLine(
-      center,
-      Offset(
-        center.dx + 100 * math.cos(pulseVal * 2 * math.pi),
-        center.dy + 100 * math.sin(pulseVal * 2 * math.pi),
-      ),
-      sweepPaint,
-    );
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1600))..repeat();
+    _anim = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
   }
 
   @override
-  bool shouldRepaint(covariant VectorMapPainter oldDelegate) {
-    return oldDelegate.zoom != zoom ||
-        oldDelegate.panX != panX ||
-        oldDelegate.panY != panY ||
-        oldDelegate.pulseVal != pulseVal;
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) => Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(
+            color: CiroColors.sevHigh.withValues(alpha: (1 - _anim.value) * 0.55),
+            width: 2,
+          ),
+        ),
+      ),
+    );
   }
 }
