@@ -46,6 +46,16 @@ class _InputScreenState extends State<InputScreen> {
     _fetchIncidents();
     _signalTimer  = Timer.periodic(const Duration(seconds: 30),  (_) => _fetchSignals());
     _incidentTimer = Timer.periodic(const Duration(minutes: 5), (_) => _fetchIncidents());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Welcome to ITLA — Crisis Intelligence & Response Orchestrator'),
+          duration: const Duration(seconds: 4),
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        ),
+      );
+    });
   }
 
   @override
@@ -445,14 +455,14 @@ class _InputScreenState extends State<InputScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 40, height: 40,
-            decoration: BoxDecoration(
-              color: CiroColors.brand,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [BoxShadow(color: CiroColors.brand.withValues(alpha: 0.25), blurRadius: 14, offset: const Offset(0, 4))],
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: Image.asset(
+              'assets/icon/app_icon.png',
+              width: 40,
+              height: 40,
+              fit: BoxFit.cover,
             ),
-            child: const Icon(Icons.shield_moon_outlined, color: Colors.white, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -460,8 +470,8 @@ class _InputScreenState extends State<InputScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text('CIRO', style: CiroType.h1(CiroColors.inkStrong).copyWith(fontSize: 19, letterSpacing: 0.2)),
-                Text('Crisis Intelligence · Global', style: CiroType.small(CiroColors.inkMuted)),
+                Text('ITLA', style: CiroType.h1(CiroColors.inkStrong).copyWith(fontSize: 19, letterSpacing: 0.2)),
+                Text('Crisis Intelligence & Response Orchestrator', style: CiroType.small(CiroColors.inkMuted)),
               ],
             ),
           ),

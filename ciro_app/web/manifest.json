@@ -1,11 +1,11 @@
 {
-    "name": "ciro_app",
-    "short_name": "ciro_app",
+    "name": "Itilah — Crisis Intelligence",
+    "short_name": "Itilah",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#0D1B2E",
+    "theme_color": "#0D1B2E",
+    "description": "Itilah — Crisis Intelligence & Response Orchestrator",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
