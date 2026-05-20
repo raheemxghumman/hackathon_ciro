@@ -111,6 +111,30 @@ class _ResultsScreenState extends State<ResultsScreen> {
     }
   }
 
+  Widget _frameworkBadge() {
+    final trace = widget.data['adk_trace'];
+    final isAdk = trace is Map && (trace['framework'] as String?) != 'fallback';
+    final label = isAdk ? 'Google ADK' : 'Groq Pipeline';
+    final color = isAdk ? const Color(0xFF1A73E8) : const Color(0xFF9C6BE8);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.30)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
+          color: color,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+
   String _weatherEmoji(String c) {
     final s = c.toLowerCase();
     if (s.contains('thunder')) return '⛈';
@@ -141,6 +165,10 @@ class _ResultsScreenState extends State<ResultsScreen> {
         ),
         title: Text('Incident report', style: CiroType.h2(CiroColors.inkStrong)),
         actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 4),
+            child: _frameworkBadge(),
+          ),
           Padding(
             padding: const EdgeInsets.only(right: 16),
             child: Pill(
@@ -537,12 +565,14 @@ class _ResultsScreenState extends State<ResultsScreen> {
 
   // ============== SIGNALS ==============
   Widget _signalsCard() {
-    final w = _asMap(_signals['weather']);
-    final t = _asMap(_signals['traffic']);
-    final q = _asMap(_signals['earthquake']);
+    final w  = _asMap(_signals['weather']);
+    final t  = _asMap(_signals['traffic']);
+    final q  = _asMap(_signals['earthquake']);
+    final s  = _asMap(_signals['social']);
     final wd = _asMap(w['data']);
     final td = _asMap(t['data']);
     final qd = _asMap(q['data']);
+    final sd = _asMap(s['data']);
 
     final condition = (wd['condition'] as String?) ?? '—';
     final alert = (wd['alert_level'] as String?) ?? '';
@@ -642,8 +672,62 @@ class _ResultsScreenState extends State<ResultsScreen> {
               ],
             ),
           ),
+          if (sd.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(height: 1, color: CiroColors.hairlineSoft),
+            const SizedBox(height: 10),
+            _socialSignalRow(sd),
+          ],
         ],
       ),
+    );
+  }
+
+  Widget _socialSignalRow(Map<String, dynamic> sd) {
+    final reach = sd['estimated_reach'];
+    final reports = sd['report_count'];
+    final amp = sd['amplification_score'];
+    String reachLabel = '—';
+    if (reach is num) {
+      reachLabel = reach >= 1000
+          ? '${(reach / 1000).toStringAsFixed(1)}k reach'
+          : '$reach reach';
+    }
+    return Row(
+      children: [
+        const Text('📱', style: TextStyle(fontSize: 14)),
+        const SizedBox(width: 8),
+        Text('SOCIAL',
+            style: CiroType.eyebrow(CiroColors.inkSubtle)),
+        const SizedBox(width: 10),
+        Text(reachLabel,
+            style: CiroType.mono(CiroColors.inkBody,
+                size: 11, w: FontWeight.w600)),
+        if (reports != null) ...[
+          const SizedBox(width: 10),
+          Text('· $reports reports',
+              style: CiroType.mono(CiroColors.inkMuted, size: 11)),
+        ],
+        if (amp != null) ...[
+          const SizedBox(width: 10),
+          Text('· amp $amp',
+              style: CiroType.mono(CiroColors.inkMuted, size: 11)),
+        ],
+        const Spacer(),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: CiroColors.surfaceAlt,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: CiroColors.hairlineSoft),
+          ),
+          child: Text(
+            'SIMULATED',
+            style: CiroType.mono(CiroColors.inkMuted,
+                size: 9, w: FontWeight.w700),
+          ),
+        ),
+      ],
     );
   }
 

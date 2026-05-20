@@ -2,5 +2,7 @@ fastapi
 uvicorn
 pydantic
 groq
+google-adk
+google-genai
 python-dotenv
 httpx

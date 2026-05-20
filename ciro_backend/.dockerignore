@@ -1,0 +1,9 @@
+venv/
+.env
+.env.yaml
+__pycache__/
+*.pyc
+*.pyo
+logs/
+.git/
+test.py

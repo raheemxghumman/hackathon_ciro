@@ -35,6 +35,7 @@ async def health():
 
 
 import orchestrator
+import adk_runner
 
 
 @app.post("/analyze")
@@ -43,6 +44,25 @@ async def analyze(body: TextRequest):
         return await orchestrator.run_pipeline(body.text)
     except Exception as e:
         return {"error": str(e)}
+
+
+@app.post("/analyze-adk")
+async def analyze_adk(body: TextRequest):
+    """Google ADK (Antigravity) orchestrated pipeline — Gemini 2.0 Flash coordinates
+    4 specialised agents: Ingest → Detect → Plan → Execute.
+    Falls back to the Groq pipeline automatically if ADK/Gemini is unavailable."""
+    try:
+        return await adk_runner.run_adk_pipeline(body.text)
+    except Exception as adk_err:
+        print(f"[ADK] Pipeline failed ({adk_err}), falling back to Groq pipeline")
+        try:
+            result = await orchestrator.run_pipeline(body.text)
+            result["framework"]  = "Groq LLaMA-3.3-70B (ADK unavailable — set GOOGLE_API_KEY from aistudio.google.com)"
+            result["adk_error"]  = str(adk_err)
+            result["adk_trace"]  = {"framework": "fallback", "reason": str(adk_err)}
+            return result
+        except Exception as e:
+            return {"error": str(e)}
 
 
 @app.get("/verify")
@@ -63,6 +83,19 @@ async def verify(location: str, event_type: str = "unknown"):
         "geocode": geo,
         "verification": result,
     }
+
+
+@app.get("/incidents")
+async def get_latest_incidents(limit: int = 5):
+    """Return latest global crisis incidents merged from ReliefWeb, GDACS, and USGS.
+    The Flutter app polls this every 5 minutes to refresh the Global Incidents feed.
+    """
+    from tools.incidents_tool import fetch_latest_incidents
+    try:
+        incidents = await fetch_latest_incidents(limit=limit)
+        return {"incidents": incidents, "count": len(incidents)}
+    except Exception as e:
+        return {"incidents": [], "count": 0, "error": str(e)}
 
 
 @app.get("/signals")

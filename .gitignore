@@ -3,6 +3,8 @@
 
 # Secrets — NEVER commit
 **/.env
+**/.env.yaml
+**/.env.*.yaml
 **/.env.local
 **/.env.*.local
 

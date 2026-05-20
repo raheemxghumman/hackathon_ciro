@@ -1,45 +1,106 @@
 # CIRO Backend Workflow
 
-This document explains the architecture and workflow of the CIRO (Crisis Intelligence & Response Orchestrator) backend, driven by Antigravity orchestration and integrating the Groq LLaMA-3.3-70B model.
+Driven by **Google ADK (Antigravity)** with **Gemini 2.5 Flash** as the multi-agent orchestrator.
 
-## Architecture Diagram
+## Architecture
 
-```ascii
-                      +------------------+
-Citizen Report ---->  |   main.py API    |
-                      +------------------+
-                               |
-                               v
-                     +-------------------+
-                     |  orchestrator.py  |
-                     +-------------------+
-                               |
-      +-------------------------------------------------+
-      |                                                 |
-      v                                                 v
-+----------------+                              +-----------------+
-|  Ingest Agent  | --- calls search_tool --->   |  Detect Agent   |
-+----------------+                              +-----------------+
-      |                                                 |
-      |-------------------------------------------------|
-      v                                                 v
-+----------------+                              +-----------------+
-|   Plan Agent   | --- calls maps_tool ----->   |  Execute Agent  |
-+----------------+                              +-----------------+
+```
+Citizen Report (any language, any location)
+        │
+        ▼
+POST /analyze-adk  (primary endpoint — FastAPI, main.py)
+        │
+        ▼
+┌───────────────────────────────────────────────────────┐
+│         Google ADK Runner  (adk_runner.py)            │
+│  Runner · InMemorySessionService · Gemini 2.5 Flash   │
+│                                                       │
+│  Gemini orchestrates 4 tools in sequence:             │
+│                                                       │
+│  1. ingest_signal_tool   ─── WeatherAPI               │
+│                          ─── Google Maps Distance Matrix
+│                          ─── USGS Earthquake Feed     │
+│                                                       │
+│  2. detect_crisis_tool   ─── Groq LLaMA-3.3-70B       │
+│                                                       │
+│  3. plan_response_tool   ─── Google Maps Directions   │
+│                          ─── Google Maps Static Maps  │
+│                          ─── Groq LLaMA-3.3-70B       │
+│                                                       │
+│  4. execute_response_tool─── Groq LLaMA-3.3-70B       │
+│                                                       │
+└───────────────────────────────────────────────────────┘
+        │
+        │  Post-processing (adk_runner.py):
+        │  · Crisis traffic uplift
+        │  · Before/after state calculation
+        │  · Incident verification (GDELT + NASA EONET + GDACS)
+        │  · JSONL trace log written to logs/adk_run_*.jsonl
+        │
+        ▼
+  JSON response → Flutter app
+  includes: ingestion · detection · plan · execution ·
+            verification · signals · adk_trace (session_id, tools_called)
 ```
 
-## Antigravity Orchestration
+## ADK agent definition (`adk_agents.py`)
 
-The Antigravity orchestration layer in `orchestrator.py` dynamically links the four core agents (`Ingest`, `Detect`, `Plan`, and `Execute`). It ensures that:
-- Inputs and outputs flow correctly from one agent to the next.
-- External tools like `search_tool` and `maps_tool` are called conditionally based on the LLM's planned actions (e.g., when a "traffic_reroute" action is identified).
-- The end-to-end trace is logged in `logs/` as a structured JSONL for debugging and tracking the system's reasoning at each step.
+```python
+ciro_adk_agent = Agent(
+    name="ciro_orchestrator",
+    model="gemini-2.5-flash",
+    tools=[ingest_signal_tool, detect_crisis_tool,
+           plan_response_tool, execute_response_tool],
+)
+```
 
-## Google Maps Tool Integration
+Gemini is instructed to call all 4 tools in strict order. Each tool wraps the
+corresponding stage from `crisis_agents.py` and stores its result in a
+per-run `_pipeline_state` dict. After all tools complete, `adk_runner.py`
+reads the state, applies post-processing transforms, and returns the unified
+response to the Flutter app.
 
-The `maps_tool` provides realistic routing capabilities for emergency response:
-- Called automatically by the orchestrator (via `plan_response`) when a traffic-related crisis demands rerouting.
-- Uses `httpx` to query the Google Maps Directions API using the `GOOGLE_MAPS_KEY` defined in the `.env` file.
-- Provides a robust mock fallback for specific Islamabad sectors (G-10, F-7, Blue Area, I-8) in case of API limits or errors, ensuring the system remains operational and can test the UI reliably.
+## Verifiable ADK proof
 
-The backend guarantees a complete, 4-stage processing pipeline for every incoming crisis report, converting raw multi-modal signals into actionable and logged response plans.
+Every `/analyze-adk` response includes:
+
+```json
+"adk_trace": {
+  "framework":    "Google Agent Development Kit (Antigravity)",
+  "model":        "gemini-2.5-flash",
+  "session_id":   "2ed4b85d-0745-430e-a...",
+  "agent":        "ciro_orchestrator",
+  "tools_called": ["ingest_signal_tool", "detect_crisis_tool",
+                   "plan_response_tool", "execute_response_tool"],
+  "event_count":  9
+}
+```
+
+The `session_id` is a live UUID generated by `InMemorySessionService` — proof
+the request ran through the ADK runtime.
+
+A per-run JSONL trace is also written to `logs/adk_run_<timestamp>.jsonl`.
+
+## Fallback path
+
+If Gemini/ADK is unavailable, `/analyze-adk` automatically falls back to the
+Groq-only pipeline (`orchestrator.py`). The Flutter app badge changes from
+"Google ADK" to "Groq Pipeline" to reflect this transparently.
+
+## Endpoint reference
+
+| Endpoint | Description |
+|---|---|
+| `POST /analyze-adk` | **Primary** — Google ADK + Gemini 2.5 Flash orchestration |
+| `POST /analyze` | Groq-only fallback pipeline |
+| `GET /signals?location=X` | Live ambient signals for any location (30 s poll) |
+| `GET /verify?location=X&event_type=Y` | Test verification APIs directly |
+| `GET /health` | Liveness probe |
+
+## Trace files
+
+- `logs/adk_run_*.jsonl` — ADK pipeline traces (one file per run)
+- `logs/run_*.jsonl` — Groq pipeline traces (fallback path)
+
+Run `adk web` in this directory (with venv active) to view the live Gemini
+agent trace in Google's ADK browser UI.
